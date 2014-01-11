@@ -1,0 +1,21 @@
+HMail is a GMail like web mail client built with Om.
+
+GMail is a great client.
+You can add your own pop3 account but not imap.
+It will start downloading all your old mails where you'd just won't to get the first x newest.
+Not everthing should go through Google, privacy wise.
+
+Can it be done completely client-side or would a server-side component for the mailbox access be necessary/better?
+Seems javascript does not have access to tcp/ip socket for this so solutions works through the browser or a server.
+
+Client Server solution
+Now it becomes a straightforward Om/Clojure app.
+The server side has access to the mailbox and provides edn of email to the client
+The client provides the GMail like look and functionality.
+
+Functionality
+keyboard shortcuts
+Email list
+chunked endless scroll
+
+

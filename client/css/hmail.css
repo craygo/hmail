@@ -1,0 +1,9 @@
+tr.message.read {
+  background-color: #eee;
+}
+tr.message.marked {
+  border-left: 2px solid #88f;
+}
+tr.message.selected {
+  background-color: #ffffcc;
+}
