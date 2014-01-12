@@ -55,7 +55,7 @@
                                           :sent #inst "2014-01-08T08:42:52.000-00:00"
                                           :isRead true}
                                          }
-                                 :marker 0}}))
+                                 }}))
 
 (defn valid? [state]
   (and true))
@@ -88,7 +88,9 @@
 (defn up-message [{:keys [by-id marker] :as old-val} mesg]
   (if-let [reading (get-in old-val [:reading])]
     (assoc-in old-val [:reading] nil)
-    old-val))
+    (do
+      (rohm/effect-messages [{:type :init :topic [:messages]}])
+      old-val)))
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
   (let [read-val (case (:value mesg)
@@ -191,20 +193,18 @@
             (om/build message-list (:messages app) {:opts (:marker app)}))
           ]]]])))
 
+(def socket (new js/WebSocket (str "ws://" window.location.host "/ws")))
+(set! (.-onmessage socket) (fn [e]
+                             (if-not (= (.-data e) "ping")
+                               (let [res (cljs.reader/read-string (.-data e))]
+                                 (.info js/console (pr-str res))
+                                 ;(rohm/put-msg res)
+                                 ))))
+(js/setInterval #(.send socket "ping") 50000)
+
 (defn client-service [message input-queue]
-  (letfn [(server-res [ev]
-            (let [res (js->clj (.getResponseJson (.-target ev)) :keywordize-keys true)
-                  res (vec (map #(assoc % :id (guid)) res))]
-              #_(rohm/put-msg :reset [:client] {:client res})))
-          (get-from-server [url]
-            (let [xhr (net/xhr-connection)]
-              (gevent/listen xhr "success" server-res)
-              (gevent/listen xhr "error" fail)
-              (net/transmit xhr url)))]
-    ; need some kind of routing here too
-    #_(if (and (= (:type message) :read) (:url message))
-      (get-from-server (:url message))
-      (.warn js/console (pr-str "client-service: don't know " message)))))
+  (if (= 1 (.-readyState socket))
+    (.send socket (pr-str message))))
   
 (def j-key 106)
 (def k-key 107)
@@ -237,6 +237,7 @@
         #_(repl/connect "http://localhost:9000/repl")))
     om/IDidMount
     (did-mount [_ _]
+      (rohm/effect-messages [{:type :init :topic [:messages]}])
       (.addEventListener js/window "keypress" key-press))
     om/IRender
     (render [_]
