@@ -48,16 +48,46 @@
             :down dec
             :up inc)
         new-marker (f marker)
-        new-marker (if-not (contains? (set ids) new-marker) marker new-marker)]
-  (assoc-in old-val [:marker] new-marker)))
+        new-marker (if-not (contains? (set ids) new-marker) marker new-marker)
+        new-val (assoc-in old-val [:marker] new-marker)]
+    (if (:reading old-val)
+      (rohm/put-msg :read [:messages]))
+    new-val))
 
 (defn select-message [{:keys [by-id marker] :as old-val} mesg]
   (update-in old-val [:by-id marker :selected] not))
+
+(defn read-message [{:keys [by-id marker] :as old-val} mesg]
+  (let [reading (get-in old-val [:by-id marker])
+        new-val (assoc-in old-val [:reading] reading)]
+    (assoc-in new-val [:by-id marker :isRead] true)))
+
+(defn up-message [{:keys [by-id marker] :as old-val} mesg]
+  (if-let [reading (get-in old-val [:reading])]
+    (do
+      (.info js/console (pr-str reading))
+      (let [new-val (assoc-in old-val [:reading] nil)]
+        (.info js/console (pr-str new-val))
+        new-val))
+    old-val))
+
+(defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
+  (let [read-val (case (:value mesg)
+                   :unread false
+                   :read true)
+        new-val (update-in old-val [:by-id] 
+                           (fn [by-id]
+                             (into {} (map (fn [[id m]] [id (if (:selected m) (assoc m :isRead read-val) m)]) by-id))
+                             ))]
+    new-val))
 
 (def routes [
              [:move [:messages] move-marker]
              [:update [:messages :marker] (fn [o m] (:value m))]
              [:select [:messages] select-message]
+             [:read [:messages] read-message]
+             [:up [:messages] up-message]
+             [:mark [:messages] mark-messages]
              ])
 
 ;; Pedestal style effect functions
@@ -89,7 +119,6 @@
 (defn message-elem [mesg owner]
   (let [is-read (:isRead mesg)]
     (om/component
-      ;(.info js/console (pr-str mesg ))
       (html
         [:tr {:className (str "message" 
                               (if is-read " read")
@@ -110,10 +139,20 @@
        [:table.table 
         [:tbody 
          (for [[i mesg] by-id]
-           ;(.info js/console (pr-str  i mesg))
            (om/build message-elem mesg 
              {:key :id 
               :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
+
+(defn message-view [mesg]
+  (om/component
+    (html
+      [:div.mesg
+       [:div.subject (:subject mesg)]
+       [:div.info
+        [:span [:strong (-> mesg :sender :personal)]]
+        [:span.pull-right (-> mesg :sent fmt)]]
+       [:div.content (:content mesg)]
+       ])))
 
 (defn client-box [app]
   (om/component
@@ -126,7 +165,10 @@
           (om/build folder-box (:folders app))]
          [:div.col-md-10
           (:marker app)
-          (om/build message-list (:messages app) {:opts (:marker app)})]]]])))
+          (if-let [reading (-> app :messages :reading)]
+            (om/build message-view reading)
+            (om/build message-list (:messages app) {:opts (:marker app)}))
+          ]]]])))
 
 (defn client-service [message input-queue]
   (letfn [(server-res [ev]
@@ -145,7 +187,10 @@
   
 (def j-key 106)
 (def k-key 107)
+(def u-key 117)
 (def x-key 120)
+(def U-key 85)
+(def I-key 73)
 (def enter-key 13)
 
 (defn key-press [e]
@@ -153,6 +198,10 @@
     j-key (rohm/put-msg :move [:messages] {:value :down})
     k-key (rohm/put-msg :move [:messages] {:value :up})
     x-key (rohm/put-msg :select [:messages])
+    enter-key (rohm/put-msg :read [:messages])
+    u-key (rohm/put-msg :up [:messages])
+    U-key (rohm/put-msg :mark [:messages] {:value :unread})
+    I-key (rohm/put-msg :mark [:messages] {:value :read})
     (.info js/console (.-which e))))
 
 (defn client-app [app]
