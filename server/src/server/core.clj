@@ -1,38 +1,45 @@
 (ns server.core
-  (:import [java.util Properties]
-           [javax.mail Session Store Folder]))
-            
-(def empanda 
-  {:protocol "imaps"
-   :server "mail.empanda.net"
-   })
+  (:use [ring.middleware stacktrace params nested-params keyword-params file file-info]
+        [clojure.tools.logging])
+  (:require [compojure.core :refer [defroutes GET]]
+            [org.httpkit.server :refer [run-server with-channel websocket? on-close on-receive send!]]))
 
-(defn get-store [user passwd]
-  (let [props (doto (Properties.)
-                (.put "mail.imap.ssl.checkserveridentity" "false")
-                (.put "mail.imaps.ssl.trust" "mail.empanda.net")
-                #_(.put "mail.debug" "true"))]
-    (let [session (Session/getDefaultInstance props)
-          store (doto (.getStore session "imaps")
-                  (.connect "mail.empanda.net" user passwd))]
-      store)))
+(def channel-hub (atom {}))
 
-(defn inetaddr->map [inetaddr]
-  (select-keys (bean inetaddr) [:personal :address]))
+(defn save-channel [user channel]
+    (swap! channel-hub assoc (str (:_id user)) channel)
+    (info "channel-hub count " (count @channel-hub)))
 
-(defn as-message [msg]
-  (let [b (bean msg)]
-    {:subject (:subject b) :sender (inetaddr->map (:sender b))
-     :content (.substring (:content b) 0 100)
-     :sent (:sentDate b)}))
+(defn open-channel [req]
+  (let [user {:id 1}]  ; TODO
+    (with-channel req channel 
+      (save-channel user channel)
+      (if (websocket? channel)
+        (info "open-channel WebSocket channel")
+        (info "open-channel HTTP channel"))
+      (on-close channel (fn [status]
+                          (info "channel closed")
+                          (swap! channel-hub dissoc (str (:_id user)))))
+      (on-receive channel (fn [data] 
+                            (info "received " data)
+                            (send! channel data))))))
 
-(defn newest-messages [store]
-  (let [inbox (doto
-                (.getFolder store "INBOX")
-                (.open Folder/READ_ONLY))
-        max-id (.getMessageCount inbox)
-        msgs (reverse (into [] (.getMessages inbox (max 0 (- max-id 0)) max-id)))]
-    (map as-message msgs)))
+(defroutes app*
+  (GET "/ws" req (open-channel req))
+  )
 
-;(def em-store (get-store "harry" "passwd"))
-;(newest-messages em-store)
+(def app
+  (-> app*
+      wrap-stacktrace
+      wrap-keyword-params
+      wrap-params
+      wrap-nested-params
+      (wrap-file "public" {:allow-symlinks? true})
+      wrap-file-info
+      ))
+
+(defn -main [port & opts]
+  (run-server #'app {:port (Integer. port) :join? false}))
+
+;(def srvr (-main 8080))
+;(srvr)
