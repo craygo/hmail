@@ -1,9 +1,39 @@
+body {
+  font-size: 13px;
+}
+tr {
+  height: 5px;
+}
+td {
+  height: 5px;
+}
 tr.message.read {
   background-color: #eee;
 }
-tr.message.marked {
+td.marked {
   border-left: 2px solid #88f;
+  width: 0px;
+}
+td.selector {
+  width: 0px;
 }
 tr.message.selected {
   background-color: #ffffcc;
+}
+.folder .btn.active, .btn:active {
+  box-shadow: none;
+  color: #db4646;
+  font-size: 14px;
+  font-weight: bold;
+}
+.folder .btn.btn-sm {
+  padding: 0px 50px 0px 5px;
+}
+.mesg {
+  border-top: 1px solid #dde;
+  width: 67%;
+  padding-top: 1px;
+}
+.mesg .content {
+  margin-top: 5px;
 }

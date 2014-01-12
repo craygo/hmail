@@ -12,16 +12,25 @@
             ))
 
 (def app-state (atom {:folders {:list
-                                ["INBOX" "other"]
-                                :current "INBOX"}
+                                ["Inbox" "Other"]
+                                :current "Inbox"}
                       :messages {
                                  :by-id {255
                                          {:id 255
                                           :subject "subject"
                                           :sender {:personal "harry"
                                                    :address "harry@empanda.net"}
-                                          :content "content"
-                                          :sent #inst "2014-01-09T08:42:52.000-00:00"
+                                          :content "<html>
+                                                   <body>
+                                                   Hi Harry
+                                                   <p><p>
+                                                   I wonder if you could do us a favour, the milk containers you have for us, would you be able to drop them to Brian and Shirleyanne's place as we will be seeing them this evening at the folk music concert in Cobargo. You and Lena should come too if you are not to tired after picking beans.
+                                          
+                                          the musician is Andy Irvine an Irish folk singer
+                                                   </p><p>
+                                          
+                                          Cheers. </body></html>"
+                                           :sent #inst "2014-01-12T13:01:52.000-00:00"
                                           :isRead false}
                                          254
                                          {:id 254
@@ -29,6 +38,20 @@
                                           :sender {:personal "Lena"
                                                    :address "harry@empanda.net"}
                                           :content "werken"
+                                          :sent #inst "2014-01-09T08:42:52.000-00:00"
+                                          :isRead true}
+                                         253
+                                         {:id 253
+                                          :subject "Milk containers"
+                                          :sender {:personal "Sam"
+                                                   :address "harry@empanda.net"}
+                                          :content "Hi Harry
+                                                   <br/>
+                                                   I wonder if you could do us a favour, the milk containers you have for us, would you be able to drop them to Brian and Shirleyanne's place as we will be seeing them this evening at the folk music concert in Cobargo. You and Lena should come too if you are not to tired after picking beans.
+                                          
+                                          the musician is Andy Irvine an Irish folk singer
+                                          
+                                          Cheers."
                                           :sent #inst "2014-01-08T08:42:52.000-00:00"
                                           :isRead true}
                                          }
@@ -64,22 +87,20 @@
 
 (defn up-message [{:keys [by-id marker] :as old-val} mesg]
   (if-let [reading (get-in old-val [:reading])]
-    (do
-      (.info js/console (pr-str reading))
-      (let [new-val (assoc-in old-val [:reading] nil)]
-        (.info js/console (pr-str new-val))
-        new-val))
+    (assoc-in old-val [:reading] nil)
     old-val))
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
   (let [read-val (case (:value mesg)
                    :unread false
-                   :read true)
-        new-val (update-in old-val [:by-id] 
-                           (fn [by-id]
-                             (into {} (map (fn [[id m]] [id (if (:selected m) (assoc m :isRead read-val) m)]) by-id))
-                             ))]
-    new-val))
+                   :read true)]
+    (update-in old-val [:by-id] 
+               (fn [by-id]
+                 (into {} (map 
+                            (fn [[id m]] 
+                              [id (if (:selected m) 
+                                    (assoc m :isRead read-val)
+                                    m)]) by-id))))))
 
 (def routes [
              [:move [:messages] move-marker]
@@ -100,8 +121,8 @@
   (let [folder (get folders index)]
     (om/component
       (html
-        [:div 
-         [:button {:className (str "btn" (if (= folder current) " active"))}
+        [:div.folder
+         [:button {:className (str "btn btn-sm" (if (= folder current) " active"))}
           folder]]))))
 
 (defn folder-box [folders]
@@ -122,10 +143,10 @@
       (html
         [:tr {:className (str "message" 
                               (if is-read " read")
-                              (if (:marker mesg) " marked")
                               (if (:selected mesg) " selected")
                               )}
-         [:td [:input {:type "checkbox" :checked (:selected mesg)}]]
+         [:td {:className (if (:marker mesg) " marked")} " "]
+         [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
          [:td (unread is-read (:personal (:sender mesg)))]
          [:td (unread is-read (:subject mesg))]
          [:td (unread is-read (fmt (:sent mesg)))]
@@ -143,23 +164,23 @@
              {:key :id 
               :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
 
-(defn message-view [mesg]
+(defn message-view [{:keys [subject sender sent content] :as mesg}]
   (om/component
     (html
-      [:div.mesg
-       [:div.subject (:subject mesg)]
-       [:div.info
-        [:span [:strong (-> mesg :sender :personal)]]
-        [:span.pull-right (-> mesg :sent fmt)]]
-       [:div.content (:content mesg)]
-       ])))
+      [:div.thread
+       [:h4 subject]
+       [:div.mesg
+        [:div.info
+         [:span [:strong (-> sender :personal)]]
+         [:span.pull-right (-> sent fmt)]]
+        [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}  ]]])))
 
 (defn client-box [app]
   (om/component
     (html
       [:div.container
        [:div.clientBox
-        [:h1 "Hmail"]
+        [:h3 "Hmail"]
         [:div.row
          [:div.col-md-2
           (om/build folder-box (:folders app))]
@@ -202,7 +223,7 @@
     u-key (rohm/put-msg :up [:messages])
     U-key (rohm/put-msg :mark [:messages] {:value :unread})
     I-key (rohm/put-msg :mark [:messages] {:value :read})
-    (.info js/console (.-which e))))
+    (.info js/console "key-press " (.-which e))))
 
 (defn client-app [app]
   (reify
