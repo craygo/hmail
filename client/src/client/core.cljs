@@ -11,51 +11,12 @@
             [client.format :refer [fmt]]
             ))
 
-(def app-state (atom {:folders {:list
+(def app-state (atom {:user {}
+                      :folders {:list
                                 ["Inbox" "Other"]
                                 :current "Inbox"}
-                      :messages {
-                                 :by-id {255
-                                         {:id 255
-                                          :subject "subject"
-                                          :sender {:personal "harry"
-                                                   :address "harry@empanda.net"}
-                                          :content "<html>
-                                                   <body>
-                                                   Hi Harry
-                                                   <p><p>
-                                                   I wonder if you could do us a favour, the milk containers you have for us, would you be able to drop them to Brian and Shirleyanne's place as we will be seeing them this evening at the folk music concert in Cobargo. You and Lena should come too if you are not to tired after picking beans.
-                                          
-                                          the musician is Andy Irvine an Irish folk singer
-                                                   </p><p>
-                                          
-                                          Cheers. </body></html>"
-                                           :sent #inst "2014-01-12T13:01:52.000-00:00"
-                                          :isRead false}
-                                         254
-                                         {:id 254
-                                          :subject "hoi"
-                                          :sender {:personal "Lena"
-                                                   :address "harry@empanda.net"}
-                                          :content "werken"
-                                          :sent #inst "2014-01-09T08:42:52.000-00:00"
-                                          :isRead true}
-                                         253
-                                         {:id 253
-                                          :subject "Milk containers"
-                                          :sender {:personal "Sam"
-                                                   :address "harry@empanda.net"}
-                                          :content "Hi Harry
-                                                   <br/>
-                                                   I wonder if you could do us a favour, the milk containers you have for us, would you be able to drop them to Brian and Shirleyanne's place as we will be seeing them this evening at the folk music concert in Cobargo. You and Lena should come too if you are not to tired after picking beans.
-                                          
-                                          the musician is Andy Irvine an Irish folk singer
-                                          
-                                          Cheers."
-                                          :sent #inst "2014-01-08T08:42:52.000-00:00"
-                                          :isRead true}
-                                         }
-                                 }}))
+                      :messages {}
+                      }))
 
 (defn valid? [state]
   (and true))
@@ -104,6 +65,16 @@
                                     (assoc m :isRead read-val)
                                     m)]) by-id))))))
 
+(defn init-messages [old-val mesg]
+  (let [new-by-id (into {} (map #(vector (:id %) %) (:value mesg)))]
+    (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
+    (assoc-in old-val [:by-id] new-by-id)))
+
+(defn login-user [old-val mesg]
+  ;(assoc-in old-val [:user :name] (:username mesg))
+  ; TODO
+  )
+
 (def routes [
              [:move [:messages] move-marker]
              [:update [:messages :marker] (fn [o m] (:value m))]
@@ -111,6 +82,8 @@
              [:read [:messages] read-message]
              [:up [:messages] up-message]
              [:mark [:messages] mark-messages]
+             [:init [:messages] init-messages]
+             [:login [:user] login-user]
              ])
 
 ;; Pedestal style effect functions
@@ -149,9 +122,9 @@
                               )}
          [:td {:className (if (:marker mesg) " marked")} " "]
          [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
-         [:td (unread is-read (:personal (:sender mesg)))]
+         [:td (unread is-read (or (:personal (:sender mesg)) (:address (:sender mesg))))]
          [:td (unread is-read (:subject mesg))]
-         [:td (unread is-read (fmt (:sent mesg)))]
+         [:td.sent (unread is-read (fmt (:sent mesg)))]
          ;[:td (pr-str mesg)]
          ]))))
 
@@ -173,34 +146,61 @@
        [:h4 subject]
        [:div.mesg
         [:div.info
-         [:span [:strong (-> sender :personal)]]
+         [:span [:strong (or (-> sender :personal) (-> sender :address))]]
          [:span.pull-right (-> sent fmt)]]
         [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}  ]]])))
+
+(defn login-screen [app owner]
+  (letfn[(signin [e]
+           (rohm/put-msg :login [:user] (rohm/extract-refs owner))
+           false)]
+    (om/component
+      (html
+        [:div.login 
+         [:form.form-horizontal {:role "form"}
+          [:div.form-group
+           [:label.col-sm-2.control-label {:for "inputUsername"} "Username"]
+           [:div.col-sm-4
+            [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username"
+                                                :defaultValue "harry"}]]]
+          [:div.form-group
+           [:label.col-sm-2.control-label {:for "inputPassword"} "Password"]
+           [:div.col-sm-4
+            [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password"
+                                                :autoFocus true}]]]
+          [:div.form-group
+           [:label.col-sm-2.control-label {:for "inputServer"} "Server"]
+           [:div.col-sm-4
+            [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server"
+                                              :defaultValue "mail.empanda.net"}]]]
+          [:div.form-group
+           [:div.col-sm-offset-2.col-sm-4
+            [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
 
 (defn client-box [app]
   (om/component
     (html
       [:div.container
        [:div.clientBox
-        [:h3 "Hmail"]
-        [:div.row
-         [:div.col-md-2
-          (om/build folder-box (:folders app))]
-         [:div.col-md-10
-          (:marker app)
-          (if-let [reading (-> app :messages :reading)]
-            (om/build message-view reading)
-            (om/build message-list (:messages app) {:opts (:marker app)}))
-          ]]]])))
+        [:h3 "Hmail"] 
+        (if (empty? (.-value (:user app)))
+          (om/build login-screen app)
+          [:div.row
+           [:div.col-md-1
+            (om/build folder-box (:folders app))]
+           [:div.col-md-11
+            (:marker app)
+            (if-let [reading (-> app :messages :reading)]
+              (om/build message-view reading)
+              (om/build message-list (:messages app) {:opts (:marker app)}))
+            ]])]])))
 
 (def socket (new js/WebSocket (str "ws://" window.location.host "/ws")))
 (set! (.-onmessage socket) (fn [e]
                              (if-not (= (.-data e) "ping")
                                (let [res (cljs.reader/read-string (.-data e))]
-                                 (.info js/console (pr-str res))
-                                 ;(rohm/put-msg res)
-                                 ))))
-(js/setInterval #(.send socket "ping") 50000)
+                                 (rohm/put-msg :init [:messages] {:value res})))))
+;(js/setInterval #(.send socket "ping") 50000)
 
 (defn client-service [message input-queue]
   (if (= 1 (.-readyState socket))
@@ -223,7 +223,8 @@
     u-key (rohm/put-msg :up [:messages])
     U-key (rohm/put-msg :mark [:messages] {:value :unread})
     I-key (rohm/put-msg :mark [:messages] {:value :read})
-    (.info js/console "key-press " (.-which e))))
+    nil
+    #_(.info js/console "key-press " (.-which e))))
 
 (defn client-app [app]
   (reify

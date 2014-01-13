@@ -17,6 +17,9 @@ td.marked {
 td.selector {
   width: 0px;
 }
+td.sent {
+  width: 100px;
+}
 tr.message.selected {
   background-color: #ffffcc;
 }
@@ -36,4 +39,7 @@ tr.message.selected {
 }
 .mesg .content {
   margin-top: 5px;
+}
+.h4 {
+  margin-top: 0;
 }

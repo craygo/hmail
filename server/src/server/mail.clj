@@ -1,4 +1,5 @@
 (ns server.mail
+  (:use [clojure.tools.logging])
   (:import [java.util Properties]
            [javax.mail Session Store Folder]))
             
@@ -23,15 +24,17 @@
 (defn as-message [msg]
   (let [b (bean msg)]
     {:subject (:subject b) :sender (inetaddr->map (:sender b))
-     :content (.substring (:content b) 0 100)
-     :sent (:sentDate b)}))
+     :content (:content b)
+     :sent (:sentDate b)
+     :id (:messageNumber b)}))
 
 (defn newest-messages [store]
   (let [inbox (doto
                 (.getFolder store "INBOX")
                 (.open Folder/READ_ONLY))
         max-id (.getMessageCount inbox)
-        msgs (reverse (into [] (.getMessages inbox (max 0 (- max-id 0)) max-id)))]
+        msgs (reverse (into [] (.getMessages inbox (max 0 (- max-id 2)) max-id)))]
+    (info (-> msgs first bean :messageNumber))
     (map as-message msgs)))
 
 ;(def em-store (get-store "harry" "passwd"))
