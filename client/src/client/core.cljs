@@ -16,6 +16,7 @@
                                 ["Inbox" "Other"]
                                 :current "Inbox"}
                       :messages {}
+                      :loading false
                       }))
 
 (defn valid? [state]
@@ -68,16 +69,19 @@
 (defn init-messages [old-val mesg]
   (let [new-by-id (into {} (map #(vector (:id %) %) (:value mesg)))]
     (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
+    (rohm/put-msg :set [:loading] true)
     (assoc-in old-val [:by-id] new-by-id)))
 
 (defn login-user [old-val mesg]
-  ;(assoc-in old-val [:user :name] (:username mesg))
-  ; TODO
+  (rohm/put-msg :set [:loading] true)
+  (rohm/effect-messages [{:type :login :topic [:user] :value (:value mesg)}])
+  old-val
   )
 
 (def routes [
              [:move [:messages] move-marker]
-             [:update [:messages :marker] (fn [o m] (:value m))]
+             [:update [:**] (fn [o m] (rohm/put-msg :set [:loading] false) (:value m))]
+             [:set [:**] (fn [o m] (:value m))]
              [:select [:messages] select-message]
              [:read [:messages] read-message]
              [:up [:messages] up-message]
@@ -152,24 +156,24 @@
 
 (defn login-screen [app owner]
   (letfn[(signin [e]
-           (rohm/put-msg :login [:user] (rohm/extract-refs owner))
+           (rohm/put-msg :login [:user] {:value (rohm/extract-refs owner)})
            false)]
     (om/component
-      (html
-        [:div.login 
+      (html 
+        [:div.login (str (:msg (:user app)))
          [:form.form-horizontal {:role "form"}
           [:div.form-group
-           [:label.col-sm-2.control-label {:for "inputUsername"} "Username"]
+           [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
             [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username"
                                                 :defaultValue "harry"}]]]
           [:div.form-group
-           [:label.col-sm-2.control-label {:for "inputPassword"} "Password"]
+           [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
             [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password"
                                                 :autoFocus true}]]]
           [:div.form-group
-           [:label.col-sm-2.control-label {:for "inputServer"} "Server"]
+           [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
             [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server"
                                               :defaultValue "mail.empanda.net"}]]]
@@ -177,35 +181,6 @@
            [:div.col-sm-offset-2.col-sm-4
             [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
 
-(defn client-box [app]
-  (om/component
-    (html
-      [:div.container
-       [:div.clientBox
-        [:h3 "Hmail"] 
-        (if (empty? (.-value (:user app)))
-          (om/build login-screen app)
-          [:div.row
-           [:div.col-md-1
-            (om/build folder-box (:folders app))]
-           [:div.col-md-11
-            (:marker app)
-            (if-let [reading (-> app :messages :reading)]
-              (om/build message-view reading)
-              (om/build message-list (:messages app) {:opts (:marker app)}))
-            ]])]])))
-
-(def socket (new js/WebSocket (str "ws://" window.location.host "/ws")))
-(set! (.-onmessage socket) (fn [e]
-                             (if-not (= (.-data e) "ping")
-                               (let [res (cljs.reader/read-string (.-data e))]
-                                 (rohm/put-msg :init [:messages] {:value res})))))
-;(js/setInterval #(.send socket "ping") 50000)
-
-(defn client-service [message input-queue]
-  (if (= 1 (.-readyState socket))
-    (.send socket (pr-str message))))
-  
 (def j-key 106)
 (def k-key 107)
 (def u-key 117)
@@ -226,6 +201,58 @@
     nil
     #_(.info js/console "key-press " (.-which e))))
 
+(defn mail-view [app]
+  (reify
+    om/IDidMount
+    (did-mount [_ _]
+      (rohm/effect-messages [{:type :init :topic [:messages]}])
+      (.addEventListener js/window "keypress" key-press))
+    om/IRender 
+    (render [_]
+      (html
+        [:div.row
+         [:div.col-md-2
+          (om/build folder-box (:folders app))]
+         [:div.col-md-10
+          (:marker app)
+          (if-let [reading (-> app :messages :reading)]
+            (om/build message-view reading)
+            (om/build message-list (:messages app) {:opts (:marker app)}))
+          ]]))))
+
+(defn logout []
+  (.removeEventListener js/window "keypress" key-press)
+  (rohm/put-msg :update [:messages] {:value {}})
+  (rohm/effect-messages [{:type :logout :topic [:user]}]))
+
+(defn client-box [app]
+  (let [username (:name (.-value (:user app)))]
+    (om/component
+      (html
+        [:div.container
+         [:div.clientBox
+          [:h3.pull-left "Hmail"] (if username [:div.pull-right username [:button.btn {:onClick logout} "logout"]])
+          [:div.loading {:className (str "loading-" (:loading app))} "loading..."]
+          [:div.clearfix]
+          (if (empty? username)
+            (om/build login-screen app)
+            (om/build mail-view app))]]))))
+
+(def socket (new js/WebSocket (str "ws://" window.location.host "/ws")))
+(set! (.-onmessage socket) (fn [e]
+                             (if-not (= (.-data e) "ping")
+                               (try
+                                 (let [res (cljs.reader/read-string (.-data e))]
+                                   ;(.info js/console (.-data e))
+                                   (rohm/put-msg res))
+                                 (catch js/Object er
+                                   (.error js/console (pr-str (.-date e))))))))
+;(js/setInterval #(.send socket "ping") 50000)
+
+(defn client-service [message input-queue]
+  (if (= 1 (.-readyState socket))
+    (.send socket (pr-str message))))
+  
 (defn client-app [app]
   (reify
     om/IWillMount
@@ -236,10 +263,6 @@
         (rohm/handle-messages app-state routes client-service)
         (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
         #_(repl/connect "http://localhost:9000/repl")))
-    om/IDidMount
-    (did-mount [_ _]
-      (rohm/effect-messages [{:type :init :topic [:messages]}])
-      (.addEventListener js/window "keypress" key-press))
     om/IRender
     (render [_]
       (om/build client-box app))))

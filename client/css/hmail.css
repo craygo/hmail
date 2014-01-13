@@ -34,7 +34,7 @@ tr.message.selected {
 }
 .mesg {
   border-top: 1px solid #dde;
-  width: 67%;
+  width: 74%;
   padding-top: 1px;
 }
 .mesg .content {
@@ -42,4 +42,14 @@ tr.message.selected {
 }
 .h4 {
   margin-top: 0;
+}
+.loading-true, .loading-false {
+  background-color: #ffc;
+  position: absolute;
+  left: 22%;
+  top: 13px;
+  padding: 5px 17px;
+}
+.loading-false {
+  display: none;
 }
