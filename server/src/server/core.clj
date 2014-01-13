@@ -1,36 +1,44 @@
 (ns server.core
-  (:use [ring.middleware stacktrace params nested-params keyword-params file file-info]
+  (:use [ring.middleware stacktrace params nested-params keyword-params file file-info session]
         [clojure.tools.logging])
   (:require [compojure.core :refer [defroutes GET]]
             [org.httpkit.server :refer [run-server with-channel websocket? on-close on-receive send!]]
             [server.messages :refer [handle-message]]
-            [clojure.tools.reader.edn :as edn]))
+            [clojure.tools.reader.edn :as edn]
+            [ring.util.response :refer [response]]))
 
-(def channel-hub (atom {}))
+#_(def channel-hub (atom {}))
 
-(defn save-channel [user channel]
-    (swap! channel-hub assoc (str (:_id user)) channel)
-    (info "channel-hub count " (count @channel-hub)))
+#_(defn save-channel [sess-id channel]
+    (swap! channel-hub assoc sess-id channel)
+    (info "channel-hub count " (count @channel-hub))
+    (info "channel-hub count " @channel-hub)
+  )
+
+(defn get-session-id [req]
+  (-> req :cookies (get "ring-session") :value))
 
 (defn open-channel [req]
-  (let [user {:id 1}]  ; TODO
+  (let [sess-id (get-session-id req)]
+    (info sess-id)
     (with-channel req channel 
-      (save-channel user channel)
+      #_(save-channel sess-id channel)
       (if (websocket? channel)
         (info "open-channel WebSocket channel")
         (info "open-channel HTTP channel"))
       (on-close channel (fn [status]
                           (info "channel closed")
-                          (swap! channel-hub dissoc (str (:_id user)))))
+                          #_(swap! channel-hub dissoc sess-id)))
       (on-receive channel (fn [data] 
-                            (info "received " data)
                             (let [res (if (= data "ping") 
                                         data
-                                        (pr-str (handle-message (edn/read-string data))))]
-                              (send! channel res)))))))
+                                        (pr-str (handle-message (edn/read-string data) channel)))]
+                              (send! channel res))))
+      channel)))
 
 (defroutes app*
   (GET "/ws" req (open-channel req))
+  (GET "/req" req (pr-str req))
   )
 
 (def app
@@ -41,6 +49,7 @@
       wrap-nested-params
       (wrap-file "public" {:allow-symlinks? true})
       wrap-file-info
+      wrap-session
       ))
 
 (defn -main [port & opts]
