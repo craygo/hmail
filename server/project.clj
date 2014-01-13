@@ -8,4 +8,6 @@
                  [ring "1.2.0"]
                  [http-kit "2.1.13"]
                  [org.clojure/tools.logging "0.2.3"]
+                 [org.clojure/tools.reader "0.8.3"]
+                 [javax.mail/mail "1.4.7"]
                  ])

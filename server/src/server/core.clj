@@ -2,7 +2,9 @@
   (:use [ring.middleware stacktrace params nested-params keyword-params file file-info]
         [clojure.tools.logging])
   (:require [compojure.core :refer [defroutes GET]]
-            [org.httpkit.server :refer [run-server with-channel websocket? on-close on-receive send!]]))
+            [org.httpkit.server :refer [run-server with-channel websocket? on-close on-receive send!]]
+            [server.messages :refer [handle-message]]
+            [clojure.tools.reader.edn :as edn]))
 
 (def channel-hub (atom {}))
 
@@ -22,7 +24,10 @@
                           (swap! channel-hub dissoc (str (:_id user)))))
       (on-receive channel (fn [data] 
                             (info "received " data)
-                            (send! channel data))))))
+                            (let [res (if (= data "ping") 
+                                        data
+                                        (pr-str (handle-message (edn/read-string data))))]
+                              (send! channel res)))))))
 
 (defroutes app*
   (GET "/ws" req (open-channel req))
