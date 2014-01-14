@@ -1,7 +1,7 @@
 (ns server.mail
   (:use [clojure.tools.logging])
   (:import [java.util Properties]
-           [javax.mail Session Store Folder]))
+           [javax.mail Session Store Folder Flags Flags$Flag FetchProfile FetchProfile$Item]))
             
 (def empanda 
   {:protocol "imaps"
@@ -36,17 +36,19 @@
 (defn as-message [msg]
   (let [b (bean msg)]
     {:subject (:subject b) :sender (inetaddr->map (:sender b))
-     :content (content-handler b)
+     :content nil #_(content-handler b)
      :sent (:sentDate b)
      :id (:messageNumber b)}))
 
-(defn newest-messages [store]
+(defn prefetch-messages [store n]
   (let [inbox (doto
                 (.getFolder store "INBOX")
                 (.open Folder/READ_ONLY))
         max-id (.getMessageCount inbox)
-        msgs (reverse (into [] (.getMessages inbox (max 0 (- max-id 3)) (- max-id 1))))]
-    (map as-message msgs)))
-
-;(def em-store (get-store "harry" "passwd"))
-;(newest-messages em-store)
+        msgs (.getMessages inbox (max 0 (- max-id (dec n))) (- max-id 0))
+        fp (doto (FetchProfile.)
+             (.add FetchProfile$Item/ENVELOPE)
+             (.add FetchProfile$Item/FLAGS)
+             (.add FetchProfile$Item/CONTENT_INFO))]
+    (.fetch inbox msgs fp)
+    (->> msgs (into []) reverse (map as-message))))
