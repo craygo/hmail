@@ -45,7 +45,7 @@
 (defn read-message [{:keys [by-id marker] :as old-val} mesg]
   (let [reading (get-in old-val [:by-id marker])
         new-val (assoc-in old-val [:reading] reading)]
-    (assoc-in new-val [:by-id marker :isRead] true)))
+    (update-in new-val [:by-id marker :flags] conj :seen)))
 
 (defn up-message [{:keys [by-id marker] :as old-val} mesg]
   (if-let [reading (get-in old-val [:reading])]
@@ -55,15 +55,15 @@
       old-val)))
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
-  (let [read-val (case (:value mesg)
-                   :unread false
-                   :read true)]
+  (let [f (case (:value mesg)
+                   :unread disj
+                   :read conj)]
     (update-in old-val [:by-id] 
                (fn [by-id]
                  (into {} (map 
                             (fn [[id m]] 
                               [id (if (:selected m) 
-                                    (assoc m :isRead read-val)
+                                    (update-in m [:flags] f :seen)
                                     m)]) by-id))))))
 
 (defn init-messages [old-val mesg]
@@ -117,7 +117,7 @@
     v))
 
 (defn message-elem [mesg owner]
-  (let [is-read (:isRead mesg)]
+  (let [is-read (contains? (:flags mesg) :seen)]
     (om/component
       (html
         [:tr {:className (str "message" 
@@ -143,7 +143,7 @@
              {:key :id 
               :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
 
-(defn message-view [{:keys [subject sender sent content] :as mesg}]
+(defn message-view [{:keys [subject sender sent content flags] :as mesg}]
   (om/component
     (html
       [:div.thread

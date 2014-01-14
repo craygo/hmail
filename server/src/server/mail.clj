@@ -38,7 +38,19 @@
     {:subject (:subject b) :sender (inetaddr->map (:sender b))
      :content nil #_(content-handler b)
      :sent (:sentDate b)
-     :id (:messageNumber b)}))
+     :id (:messageNumber b)
+     :flags (let [flags (-> b :flags bean :systemFlags)]
+              (areduce flags i ret #{} 
+                       (conj ret
+                             (condp = (aget flags i)
+                               Flags$Flag/ANSWERED :answered
+                               Flags$Flag/DELETED :deleted
+                               Flags$Flag/DRAFT :draft
+                               Flags$Flag/FLAGGED :flagged
+                               Flags$Flag/RECENT :recent
+                               Flags$Flag/SEEN :seen
+                               Flags$Flag/USER :user
+                               ))))}))
 
 (defn prefetch-messages [store n]
   (let [inbox (doto
