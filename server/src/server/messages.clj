@@ -1,21 +1,22 @@
 (ns server.messages
   (:use [clojure.tools.logging])
-  (:require [server.mail :refer [get-store newest-messages]]
+  (:require [server.mail :refer [get-store prefetch-messages]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
             ))
 
-(def channels (atom {}))
+(def channels (atom {})) ; channel to {:store :messages}
+
+;(->> @channels identity)
 
 (defmacro ws-send [channel & body]
   `(go (send! ~channel (<! (go (pr-str (do ~@body)))))))
 
 (defn init-messages [channel]
-  (info "init-messages " channel #_(get-in @channels [channel :messages]))
   (if (empty? (get-in @channels [channel :messages]))
     (do
       (ws-send channel 
-               (swap! channels assoc-in [channel :messages] (newest-messages (get-in @channels [channel :store])))
+               (swap! channels assoc-in [channel :messages] (prefetch-messages (get-in @channels [channel :store]) 10))
                {:type :init :topic [:messages] :value (get-in @channels [channel :messages])})
       [])
     {:type :init :topic [:messages] :value (get-in @channels [channel :messages])}))
@@ -41,10 +42,12 @@
       (error e e)
       {:type :update :topic [:user] :value {:msg (.getMessage e)}})))
 
-(defn logout [mesg channel]
-  (info "logout " channel)
+(defn logout [channel]
   (swap! channels assoc-in [channel] nil)
   {:type :update :topic [:user] :value {}})
+
+(defn close [channel]
+  (swap! channels dissoc channel))
 
 (defn handle-message [{:keys [type topic] :as mesg} channel]
   (try
@@ -52,7 +55,8 @@
     (condp = type
       :init (init-messages channel)
       :login (login mesg channel)
-      :logout (logout mesg channel)
+      :logout (logout channel)
+      :close (close channel)
       (info "no handler for: " (:dissoc mesg :value))
       )
     (catch Exception e

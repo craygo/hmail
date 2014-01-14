@@ -67,7 +67,7 @@
                                     m)]) by-id))))))
 
 (defn init-messages [old-val mesg]
-  (let [new-by-id (into {} (map #(vector (:id %) %) (:value mesg)))]
+  (let [new-by-id (apply sorted-map (flatten (map #(vector (:id %) %) (:value mesg))))]
     (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
     (rohm/put-msg :set [:loading] true)
     (assoc-in old-val [:by-id] new-by-id)))
@@ -138,7 +138,7 @@
       [:div.message-list ;marker
        [:table.table 
         [:tbody 
-         (for [[i mesg] by-id]
+         (for [[i mesg] (reverse by-id)]
            (om/build message-elem mesg 
              {:key :id 
               :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
