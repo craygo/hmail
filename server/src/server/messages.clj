@@ -1,25 +1,51 @@
 (ns server.messages
   (:use [clojure.tools.logging])
-  (:require [server.mail :refer [get-store prefetch-messages]]
+  (:require [server.mail :refer [get-store prefetch-messages fetch-content as-message]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
             ))
 
 (def channels (atom {})) ; channel to {:store :messages}
 
-;(->> @channels identity)
-
 (defmacro ws-send [channel & body]
-  `(go (send! ~channel (<! (go (pr-str (do ~@body)))))))
+  `(go (send! ~channel (pr-str (do ~@body)))))
 
+;; message helpers
+(defn messages-mesg [channel]
+  {:type :init :topic [:messages] :value (get-in @channels [channel :client-messages-by-id])})
+
+(defn fetch-content-for-all-messages [channel]
+  (info "fetch-content-for-all-messages " channel)
+  (let [msgs (get-in @channels [channel :raw-messages])]
+    (doseq [mesg msgs]
+      (go (let [[id content] (fetch-content mesg)]
+            (info "fetch-content-for-all-messages " id (count content))
+            (swap! channels assoc-in [channel :client-messages-by-id id :content] content)
+            (send! channel (pr-str (messages-mesg channel))))))))
+
+(def prefetch-size 10)
+
+(defn prefetch-top-messages [channel]
+  (let [store (get-in @channels [channel :store])
+        msgs (prefetch-messages store prefetch-size)
+        client-msgs (map as-message msgs)
+        client-msgs (into {} (map #(vector (:id %) %) client-msgs))]
+    (swap! channels assoc-in [channel :raw-messages] msgs)
+    (swap! channels assoc-in [channel :client-messages-by-id] client-msgs)
+    (fetch-content-for-all-messages channel)))
+
+(defn have-messages? [channel]
+  (seq (get-in @channels [channel :client-messages-by-id])))
+
+;; handlers
 (defn init-messages [channel]
-  (if (empty? (get-in @channels [channel :messages]))
+  (if-not (have-messages? channel)
     (do
       (ws-send channel 
-               (swap! channels assoc-in [channel :messages] (prefetch-messages (get-in @channels [channel :store]) 10))
-               {:type :init :topic [:messages] :value (get-in @channels [channel :messages])})
+               (prefetch-top-messages channel)
+               (messages-mesg channel))
       [])
-    {:type :init :topic [:messages] :value (get-in @channels [channel :messages])}))
+    (messages-mesg channel)))
 
 (defn login [mesg channel]
   (try 
