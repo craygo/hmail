@@ -63,4 +63,8 @@
              (.add FetchProfile$Item/FLAGS)
              (.add FetchProfile$Item/CONTENT_INFO))]
     (.fetch inbox msgs fp)
-    (->> msgs (into []) reverse (map as-message))))
+    (->> msgs (into []) reverse)))
+
+(defn fetch-content [mesg]
+  (let [b (bean mesg)]
+    [(:messageNumber b) (content-handler b)]))

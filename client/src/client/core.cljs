@@ -67,7 +67,7 @@
                                     m)]) by-id))))))
 
 (defn init-messages [old-val mesg]
-  (let [new-by-id (apply sorted-map (flatten (map #(vector (:id %) %) (:value mesg))))]
+  (let [new-by-id (:value mesg)]
     (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
     (rohm/put-msg :set [:loading] true)
     (assoc-in old-val [:by-id] new-by-id)))
@@ -127,6 +127,7 @@
          [:td {:className (if (:marker mesg) " marked")} " "]
          [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
          [:td (unread is-read (or (:personal (:sender mesg)) (:address (:sender mesg))))]
+         [:td (count (:content mesg))]
          [:td (unread is-read (:subject mesg))]
          [:td.sent (unread is-read (fmt (:sent mesg)))]
          ;[:td (pr-str mesg)]
@@ -143,16 +144,19 @@
              {:key :id 
               :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
 
-(defn message-view [{:keys [subject sender sent content flags] :as mesg}]
-  (om/component
-    (html
-      [:div.thread
-       [:h4 subject]
-       [:div.mesg
-        [:div.info
-         [:span [:strong (or (-> sender :personal) (-> sender :address))]]
-         [:span.pull-right (-> sent fmt)]]
-        [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}  ]]])))
+(defn message-view [messages]
+  (let [marker (:marker messages)
+        reading (get-in messages [:by-id marker])
+        {:keys [subject sender sent content flags] :as mesg} reading]
+    (om/component
+      (html
+        [:div.thread
+         [:h4 subject]
+         [:div.mesg
+          [:div.info
+           [:span [:strong (or (-> sender :personal) (-> sender :address))]]
+           [:span.pull-right (-> sent fmt)]]
+          [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}  ]]]))))
 
 (defn login-screen [app owner]
   (letfn[(signin [e]
@@ -216,7 +220,7 @@
          [:div.col-md-10
           (:marker app)
           (if-let [reading (-> app :messages :reading)]
-            (om/build message-view reading)
+            (om/build message-view (:messages app))
             (om/build message-list (:messages app) {:opts (:marker app)}))
           ]]))))
 
