@@ -1,3 +1,4 @@
 server/target/
 client/target/
 client/out/
+.fuse_hidden*
