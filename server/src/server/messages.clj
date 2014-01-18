@@ -12,16 +12,16 @@
   `(go (send! ~channel (pr-str (do ~@body)))))
 
 ;; message helpers
-(defn messages-mesg [channel]
-  {:type :init :topic [:messages] :value (get-in @channels [channel :client-messages-by-id])})
+(defn messages-mesg [channel & [init]]
+  {:type (if init :init :merge) :topic [:messages] :value (get-in @channels [channel :client-messages-by-id])})
 
 (defn fetch-content-for-all-messages [channel]
-  (info "fetch-content-for-all-messages " channel)
+  ;(info "fetch-content-for-all-messages " channel)
   (let [msgs (get-in @channels [channel :raw-messages])]
     (doseq [mesg msgs]
       (go (let [[id content] (fetch-content mesg)
                 content (stop-images content)]
-            (info "fetch-content-for-all-messages " id (count content))
+            ;(info "fetch-content-for-all-messages " id (count content))
             (swap! channels assoc-in [channel :client-messages-by-id id :content] content)
             (send! channel (pr-str (messages-mesg channel))))))))
 
@@ -45,7 +45,7 @@
     (do
       (ws-send channel 
                (prefetch-top-messages channel)
-               (messages-mesg channel))
+               (messages-mesg channel :init))
       [])
     (messages-mesg channel)))
 
