@@ -56,21 +56,27 @@
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
   (let [f (case (:value mesg)
-                   :unread disj
-                   :read conj)]
+            :unread disj
+            :read conj)]
     (update-in old-val [:by-id] 
-               (fn [by-id]
-                 (into {} (map 
-                            (fn [[id m]] 
-                              [id (if (:selected m) 
-                                    (update-in m [:flags] f :seen)
-                                    m)]) by-id))))))
+               #(reduce (fn [by-id id] 
+                          (if (:selected (get by-id id))
+                            (update-in by-id [id :flags] f :seen)
+                            by-id))
+                        % (keys %)))))
 
 (defn init-messages [old-val mesg]
   (let [new-by-id (:value mesg)]
     (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
     (rohm/put-msg :set [:loading] true)
     (assoc-in old-val [:by-id] (apply sorted-map (flatten (seq new-by-id))))))
+
+(defn merge-messages [old-val mesg]
+  (let [new-by-id (:value mesg)]
+    (update-in old-val [:by-id] 
+              #(reduce (fn [by-id [id m]] 
+                         (assoc-in by-id [id :content] (:content m)))
+                       % new-by-id))))
 
 (defn login-user [old-val mesg]
   (rohm/put-msg :set [:loading] true)
@@ -87,6 +93,7 @@
              [:up [:messages] up-message]
              [:mark [:messages] mark-messages]
              [:init [:messages] init-messages]
+             [:merge [:messages] merge-messages]
              [:login [:user] login-user]
              ])
 
@@ -161,7 +168,7 @@
            [:span.pull-right (-> sent fmt)]]
           (if (= content-type :html)
             [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}]
-            [:div.content nil [:pre content]])
+            [:div.content nil (if content [:pre content] "Loading...")])
           ]]))))
 
 (defn login-screen [app owner]
