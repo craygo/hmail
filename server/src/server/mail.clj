@@ -3,11 +3,6 @@
   (:import [java.util Properties]
            [javax.mail Session Store Folder Flags Flags$Flag FetchProfile FetchProfile$Item]))
             
-(def empanda 
-  {:protocol "imaps"
-   :server "mail.empanda.net"
-   })
-
 (defn get-store 
   ([user passwd]
    (get-store user passwd "mail.empanda.net"))
@@ -24,13 +19,14 @@
 (defn inetaddr->map [inetaddr]
   (select-keys (bean inetaddr) [:personal :address]))
 
+
 (defn content-handler [b]
   (let [cont (:content b)]
-    (info "content-handler " (:contentType b) (type (:contentType b)) (type cont))
     (condp #(.startsWith %2 %1) (:contentType b)
-      "TEXT/HTML" cont
-      "multipart/ALTERNATIVE" (.getContent (.getBodyPart cont 1)) ; TODO check part 1 is HTML
-      "multipart/MIXED" "multipart/MIXED" ;(.getContent (.getBodyPart cont 1)) ; TODO check part 1 is HTML
+      "TEXT/PLAIN" {:type :plain :content cont}
+      "TEXT/HTML" {:type :html :content cont}
+      "multipart/ALTERNATIVE" (content-handler (bean (.getBodyPart cont 1)))
+      "multipart/MIXED" (content-handler (bean (.getBodyPart cont 0)))
       cont)))
 
 (defn as-message [msg]

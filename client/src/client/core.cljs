@@ -70,7 +70,7 @@
   (let [new-by-id (:value mesg)]
     (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
     (rohm/put-msg :set [:loading] true)
-    (assoc-in old-val [:by-id] new-by-id)))
+    (assoc-in old-val [:by-id] (apply sorted-map (flatten (seq new-by-id))))))
 
 (defn login-user [old-val mesg]
   (rohm/put-msg :set [:loading] true)
@@ -126,6 +126,7 @@
                               )}
          [:td {:className (if (:marker mesg) " marked")} " "]
          [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
+         [:td (:id mesg)]
          [:td (unread is-read (or (:personal (:sender mesg)) (:address (:sender mesg))))]
          [:td (count (:content mesg))]
          [:td (unread is-read (:subject mesg))]
@@ -147,7 +148,9 @@
 (defn message-view [messages]
   (let [marker (:marker messages)
         reading (get-in messages [:by-id marker])
-        {:keys [subject sender sent content flags] :as mesg} reading]
+        {:keys [subject sender sent content flags] :as mesg} reading
+        content-type (:type content)
+        content (:content content)]
     (om/component
       (html
         [:div.thread
@@ -156,7 +159,10 @@
           [:div.info
            [:span [:strong (or (-> sender :personal) (-> sender :address))]]
            [:span.pull-right (-> sent fmt)]]
-          [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}  ]]]))))
+          (if (= content-type :html)
+            [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}]
+            [:div.content nil [:pre content]])
+          ]]))))
 
 (defn login-screen [app owner]
   (letfn[(signin [e]

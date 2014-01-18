@@ -3,6 +3,7 @@
   (:require [server.mail :refer [get-store prefetch-messages fetch-content as-message]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
+            [server.images :refer [stop-images]]
             ))
 
 (def channels (atom {})) ; channel to {:store :messages}
@@ -18,7 +19,8 @@
   (info "fetch-content-for-all-messages " channel)
   (let [msgs (get-in @channels [channel :raw-messages])]
     (doseq [mesg msgs]
-      (go (let [[id content] (fetch-content mesg)]
+      (go (let [[id content] (fetch-content mesg)
+                content (stop-images content)]
             (info "fetch-content-for-all-messages " id (count content))
             (swap! channels assoc-in [channel :client-messages-by-id id :content] content)
             (send! channel (pr-str (messages-mesg channel))))))))
