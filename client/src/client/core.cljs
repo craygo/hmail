@@ -133,9 +133,9 @@
                               )}
          [:td {:className (if (:marker mesg) " marked")} " "]
          [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
-         [:td (:id mesg)]
+         ;[:td (:id mesg)]
          [:td (unread is-read (or (:personal (:sender mesg)) (:address (:sender mesg))))]
-         [:td (count (:content mesg))]
+         ;[:td (count (:content mesg))]
          [:td (unread is-read (:subject mesg))]
          [:td.sent (unread is-read (fmt (:sent mesg)))]
          ;[:td (pr-str mesg)]

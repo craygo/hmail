@@ -48,19 +48,23 @@
                                Flags$Flag/USER :user
                                ))))}))
 
-(defn prefetch-messages [store n]
-  (let [inbox (doto
-                (.getFolder store "INBOX")
-                (.open Folder/READ_ONLY))
-        max-id (.getMessageCount inbox)
-        msgs (.getMessages inbox (max 0 (- max-id (dec n))) (- max-id 0))
+(defn get-inbox [store]
+  (doto (.getFolder store "INBOX")
+    (.open  Folder/READ_ONLY)))
+
+(defn prefetch-messages [folder n]
+  (let [max-id (.getMessageCount folder)
+        msgs (.getMessages folder (max 0 (- max-id (dec n))) (- max-id 0))
         fp (doto (FetchProfile.)
              (.add FetchProfile$Item/ENVELOPE)
              (.add FetchProfile$Item/FLAGS)
              (.add FetchProfile$Item/CONTENT_INFO))]
-    (.fetch inbox msgs fp)
+    (.fetch folder msgs fp)
     (->> msgs (into []) reverse)))
 
 (defn fetch-content [mesg]
   (let [b (bean mesg)]
     [(:messageNumber b) (content-handler b)]))
+
+(defn message-count [folder]
+  (.getMessageCount folder))

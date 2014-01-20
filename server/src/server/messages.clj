@@ -1,12 +1,20 @@
 (ns server.messages
   (:use [clojure.tools.logging])
-  (:require [server.mail :refer [get-store prefetch-messages fetch-content as-message]]
+  (:require [server.mail :refer [get-store get-inbox prefetch-messages fetch-content as-message message-count]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
             [server.images :refer [stop-images]]
             ))
 
 (def channels (atom {})) ; channel to {:store :messages}
+
+#_(-> @channels
+    first 
+    second
+    :store
+    (.getFolder "INBOX")
+    .isOpen
+    )
 
 (defmacro ws-send [channel & body]
   `(go (send! ~channel (pr-str (do ~@body)))))
@@ -25,29 +33,41 @@
             (swap! channels assoc-in [channel :client-messages-by-id id :content] content)
             (send! channel (pr-str (messages-mesg channel))))))))
 
-(def prefetch-size 10)
-
-(defn prefetch-top-messages [channel]
-  (let [store (get-in @channels [channel :store])
-        msgs (prefetch-messages store prefetch-size)
-        client-msgs (map as-message msgs)
-        client-msgs (into {} (map #(vector (:id %) %) client-msgs))]
-    (swap! channels assoc-in [channel :raw-messages] msgs)
-    (swap! channels assoc-in [channel :client-messages-by-id] client-msgs)
-    (fetch-content-for-all-messages channel)))
+(defn prefetch-top-messages [channel n]
+  (let [inbox (get-in @channels [channel :inbox])]
+    (info "prefetch-top-messages inbox " inbox)
+    (let [msgs (prefetch-messages inbox n)
+          client-msgs (map as-message msgs)
+          client-msgs (into {} (map #(vector (:id %) %) client-msgs))]
+      (swap! channels update-in [channel :raw-messages] concat msgs)
+      (swap! channels update-in [channel :client-messages-by-id] merge client-msgs)
+      (fetch-content-for-all-messages channel))))
 
 (defn have-messages? [channel]
   (seq (get-in @channels [channel :client-messages-by-id])))
+
+(defn check-new [channel]
+  (let [inbox (get-in @channels [channel :inbox])
+        msg-cnt (message-count inbox)
+        highest (apply max (keys (get-in @channels [channel :client-messages-by-id])))]
+    (info "check-new " 
+          (.hasNewMessages inbox) 
+          msg-cnt highest)
+    (if (> msg-cnt highest)
+      (prefetch-top-messages channel (- msg-cnt highest)))
+    (messages-mesg channel :init)))
+
+(def prefetch-size 10)
 
 ;; handlers
 (defn init-messages [channel]
   (if-not (have-messages? channel)
     (do
       (ws-send channel 
-               (prefetch-top-messages channel)
+               (prefetch-top-messages channel prefetch-size)
                (messages-mesg channel :init))
       [])
-    (messages-mesg channel)))
+    (check-new channel)))
 
 (defn login [mesg channel]
   (try 
@@ -56,9 +76,10 @@
           store* (get-store username password server)]
       (info "login " username server)
       (if (.isConnected store*)
-        (do
-          (info "login connected")
+        (let [inbox (get-inbox store*)]
+          (info "login connected inbox " inbox)
           (swap! channels assoc-in [channel  :store] store*)
+          (swap! channels assoc-in [channel  :inbox] inbox)
           {:type :update :topic [:user] :value {:name username}})
         (do
           (info "login NOT connected")
