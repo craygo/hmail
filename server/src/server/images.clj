@@ -18,7 +18,10 @@
                                  (split-on-curly (first lines)))]
                      (->> lines
                           (map #(if (re-find #"\{" %)
-                                  (str ".content " %)
+                                  (if (or (.startsWith % "body")
+                                          (.startsWith % "html"))
+                                    (str ".content." %)
+                                    (str ".content " %))
                                   %))
                           (clojure.string/join "\n"))))))))
 
@@ -28,7 +31,7 @@
           nodes (with-open [fl (java.io.StringReader. html-str)]
                   (html-resource fl))]
       (assoc content :content (apply str (emit* (at nodes 
-                                                    [:img] (remove-attr :src)
-                                                    ;[:style] safe-body
+                                                    [:img] (set-attr :src "/img/blocked.gif")
+                                                    [:style] safe-body
                                                     )))))
     content))
