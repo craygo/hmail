@@ -1,58 +1,63 @@
+/* Welcome to Compass.
+ * In this file you should write your main styles. (or centralize your imports)
+ * Import this file using the following HTML or equivalent:
+ * <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css" /> */
 body {
   font-size: 13px;
 }
-tr {
+
+#container tr {
   height: 5px;
 }
-td {
-  height: 5px;
-}
-tr.message.read {
+#container tr.message.read {
   background-color: #eee;
 }
-td.marked {
+#container tr.message.selected {
+  background-color: #ffffcc;
+}
+#container td {
+  height: 5px;
+}
+#container td.marked {
   border-left: 2px solid #88f;
   width: 0px;
 }
-td.selector {
+#container td.selector {
   width: 0px;
 }
-td.sent {
+#container td.sent {
   width: 100px;
 }
-tr.message.selected {
-  background-color: #ffffcc;
-}
-.folder .btn.active, .btn:active {
+#container .folder .btn.active, #container .folder .btn:active {
   box-shadow: none;
   color: #db4646;
   font-size: 14px;
   font-weight: bold;
 }
-.folder .btn.btn-sm {
+#container .folder .btn.btn-sm {
   padding: 0px 50px 0px 5px;
 }
-.mesg {
+#container .mesg {
   border-top: 1px solid #dde;
   width: 80%;
   padding-top: 1px;
 }
-.mesg .content {
+#container .mesg .content {
   margin-top: 5px;
 }
-.mesg .content pre {
+#container .mesg .content pre {
   font-size: 12px;
 }
-.h4 {
+#container .h4 {
   margin-top: 0;
 }
-.loading-true, .loading-false {
+#container .loading-true, #container .loading-false {
   background-color: #ffc;
   position: absolute;
   left: 22%;
   top: 13px;
   padding: 5px 17px;
 }
-.loading-false {
+#container .loading-false {
   display: none;
 }

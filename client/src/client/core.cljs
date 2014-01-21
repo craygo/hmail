@@ -167,7 +167,7 @@
            [:span [:strong (or (-> sender :personal) (-> sender :address))]]
            [:span.pull-right (-> sent fmt)]]
           (if (= content-type :html)
-            [:div.content {:dangerouslySetInnerHTML #js {"__html" content}}]
+            [:div.content.html.body {:dangerouslySetInnerHTML #js {"__html" content}}]
             [:div.content nil (if content [:pre content] "Loading...")])
           ]]))))
 
