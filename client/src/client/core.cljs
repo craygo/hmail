@@ -2,9 +2,10 @@
   (:require [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [cljs.core.async :refer [put! <! chan]]
+            [cljs.reader :refer [read-string]]
             [clojure.browser.net :as net]
             [clojure.browser.event :as gevent]
-            ;[clojure.browser.repl :as repl]
+            [clojure.browser.repl :as repl]
             [rohm.core :as rohm :include-macros true]
             [sablono.core :as html :refer [html] :include-macros true]
             [client.format :refer [fmt]]
@@ -73,8 +74,8 @@
 (defn merge-messages [old-val mesg]
   (let [new-by-id (:value mesg)]
     (update-in old-val [:by-id] 
-              #(reduce (fn [by-id [id m]] 
-                         (assoc-in by-id [id :content] (:content m)))
+               #(reduce (fn [by-id [id m]] 
+                          (assoc-in by-id [id] m))
                        % new-by-id))))
 
 (defn login-user [old-val mesg]
@@ -181,7 +182,8 @@
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
-            [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" }]]]
+            [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" 
+                                                :defaultValue "harry"}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
@@ -190,7 +192,8 @@
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
-            [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server" }]]]
+            [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server" 
+                                              :defaultValue "mail.empanda.net"}]]]
           [:div.form-group
            [:div.col-sm-offset-2.col-sm-4
             [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
@@ -252,17 +255,17 @@
             (om/build login-screen app)
             (om/build mail-view app))]]))))
 
-(def socket (new js/WebSocket (str "wss://" window.location.host "/ws")))
+(def ws-prot (if (re-find #"localhost" window.location.host) "ws" "wss"))
+(def socket (new js/WebSocket (str ws-prot "://" window.location.host "/ws")))
 (set! (.-onmessage socket) (fn [e]
                              (if-not (= (.-data e) "ping")
                                (try
-                                 (let [res (cljs.reader/read-string (.-data e))]
-                                   ;(.info js/console (.-data e))
+                                 (let [res (read-string (.-data e))]
                                    (rohm/put-msg res))
                                  (catch js/Object er
-                                   (.error js/console (pr-str (.-date e))))))))
+                                   (.error js/console (pr-str "error " (.-data e))))))))
 
-(js/setInterval #(.send socket "ping") 50000) ; keep socket open on Heroku
+;(js/setInterval #(.send socket "ping") 50000) ; keep socket open on Heroku
 
 (defn client-service [message input-queue]
   (if (= 1 (.-readyState socket))
@@ -274,7 +277,7 @@
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
       (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
-      #_(repl/connect "http://localhost:9000/repl"))
+      (repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]
       (om/build client-box app))))

@@ -20,4 +20,5 @@ goog.addDependency("../cljs/core/async/impl/channels.js", ['cljs.core.async.impl
 goog.addDependency("../cljs/core/async/impl/timers.js", ['cljs.core.async.impl.timers'], ['cljs.core', 'cljs.core.async.impl.channels', 'cljs.core.async.impl.dispatch', 'cljs.core.async.impl.protocols']);
 goog.addDependency("../cljs/core/async.js", ['cljs.core.async'], ['cljs.core.async.impl.ioc_helpers', 'cljs.core.async.impl.buffers', 'cljs.core', 'cljs.core.async.impl.channels', 'cljs.core.async.impl.dispatch', 'cljs.core.async.impl.protocols', 'cljs.core.async.impl.timers']);
 goog.addDependency("../rohm/core.js", ['rohm.core'], ['cljs.core', 'om.core', 'cljs.core.async']);
-goog.addDependency("../client/core.js", ['client.core'], ['clojure.browser.event', 'clojure.browser.net', 'sablono.core', 'cljs.core', 'om.core', 'client.format', 'rohm.core', 'om.dom', 'cljs.core.async']);
+goog.addDependency("../clojure/browser/repl.js", ['clojure.browser.repl'], ['clojure.browser.event', 'clojure.browser.net', 'cljs.core']);
+goog.addDependency("../client/core.js", ['client.core'], ['clojure.browser.event', 'clojure.browser.net', 'sablono.core', 'cljs.core', 'om.core', 'client.format', 'rohm.core', 'om.dom', 'cljs.reader', 'clojure.browser.repl', 'cljs.core.async']);
