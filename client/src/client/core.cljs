@@ -265,7 +265,8 @@
                                  (catch js/Object er
                                    (.error js/console (pr-str "error " (.-data e))))))))
 
-;(js/setInterval #(.send socket "ping") 50000) ; keep socket open on Heroku
+(if-not (re-find #"localhost" window.location.host)
+  (js/setInterval #(.send socket "ping") 50000)) ; keep socket open on Heroku
 
 (defn client-service [message input-queue]
   (if (= 1 (.-readyState socket))
