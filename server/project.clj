@@ -11,5 +11,5 @@
                  [org.clojure/tools.reader "0.8.3"]
                  [javax.mail/mail "1.4.7"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
-                 [enlive "1.1.5"]
-                 ])
+                 [enlive "1.1.5"] ]
+  :min-lein-version "2.0.0")
