@@ -2,10 +2,9 @@
   (:require [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [cljs.core.async :refer [put! <! chan]]
-            [client.utils :refer [guid]]
             [clojure.browser.net :as net]
             [clojure.browser.event :as gevent]
-            [clojure.browser.repl :as repl]
+            ;[clojure.browser.repl :as repl]
             [rohm.core :as rohm :include-macros true]
             [sablono.core :as html :refer [html] :include-macros true]
             [client.format :refer [fmt]]
@@ -182,8 +181,7 @@
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
-            [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username"
-                                                :defaultValue "harry"}]]]
+            [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" }]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
@@ -192,8 +190,7 @@
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
-            [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server"
-                                              :defaultValue "mail.empanda.net"}]]]
+            [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server" }]]]
           [:div.form-group
            [:div.col-sm-offset-2.col-sm-4
             [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
@@ -264,7 +261,8 @@
                                    (rohm/put-msg res))
                                  (catch js/Object er
                                    (.error js/console (pr-str (.-date e))))))))
-;(js/setInterval #(.send socket "ping") 50000)
+
+(js/setInterval #(.send socket "ping") 50000) ; keep socket open on Heroku
 
 (defn client-service [message input-queue]
   (if (= 1 (.-readyState socket))
@@ -274,12 +272,9 @@
   (reify
     om/IWillMount
     (will-mount [this]
-      (let [{:keys [url poll-interval]} app]
-        ;(rohm/effect-messages (get-server-clients-effect url))
-        ;(js/setInterval #(rohm/effect-messages (get-server-clients-effect %)) poll-interval url)
-        (rohm/handle-messages app-state routes client-service)
-        (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
-        #_(repl/connect "http://localhost:9000/repl")))
+      (rohm/handle-messages app-state routes client-service)
+      (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
+      #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]
       (om/build client-box app))))
