@@ -278,7 +278,7 @@
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
       (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
-      (repl/connect "http://localhost:9000/repl"))
+      #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]
       (om/build client-box app))))
