@@ -50,7 +50,7 @@
 
 (defn get-inbox [store]
   (doto (.getFolder store "INBOX")
-    (.open  Folder/READ_ONLY)))
+    (.open Folder/READ_ONLY)))
 
 (defn prefetch-messages [folder n]
   (let [max-id (.getMessageCount folder)

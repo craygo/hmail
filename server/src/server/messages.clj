@@ -46,18 +46,14 @@
 (defn have-messages? [channel]
   (seq (get-in @channels [channel :client-messages-by-id])))
 
-(defn check-new [channel]
-  (let [inbox (get-in @channels [channel :inbox])
-        msg-cnt (message-count inbox)
+(defn check-new [channel inbox]
+  (let [msg-cnt (message-count inbox)
         highest (apply max (keys (get-in @channels [channel :client-messages-by-id])))]
-    (info "check-new " 
-          (.hasNewMessages inbox) 
-          msg-cnt highest)
     (if (> msg-cnt highest)
       (prefetch-top-messages channel (- msg-cnt highest)))
-    (messages-mesg channel :init)))
+    (messages-mesg channel)))
 
-(def prefetch-size 10)
+(def prefetch-size 3)
 
 ;; handlers
 (defn init-messages [channel]
@@ -67,7 +63,7 @@
                (prefetch-top-messages channel prefetch-size)
                (messages-mesg channel :init))
       [])
-    (check-new channel)))
+    (check-new channel (get-in @channels [channel :inbox]))))
 
 (defn login [mesg channel]
   (try 
@@ -78,8 +74,8 @@
       (if (.isConnected store*)
         (let [inbox (get-inbox store*)]
           (info "login connected inbox " inbox)
-          (swap! channels assoc-in [channel  :store] store*)
-          (swap! channels assoc-in [channel  :inbox] inbox)
+          (swap! channels assoc-in [channel :store] store*)
+          (swap! channels assoc-in [channel :inbox] inbox)
           {:type :update :topic [:user] :value {:name username}})
         (do
           (info "login NOT connected")
