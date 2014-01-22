@@ -1,1 +1,1 @@
-web: lein with-profile production trampoline run -m client.core $PORT $URL
+web: lein with-profile production trampoline run -m server.core $PORT $URL

@@ -252,7 +252,7 @@
             (om/build login-screen app)
             (om/build mail-view app))]]))))
 
-(def socket (new js/WebSocket (str "ws://" window.location.host "/ws")))
+(def socket (new js/WebSocket (str "wss://" window.location.host "/ws")))
 (set! (.-onmessage socket) (fn [e]
                              (if-not (= (.-data e) "ping")
                                (try

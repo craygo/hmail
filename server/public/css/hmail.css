@@ -1,1 +1,63 @@
-../../../client/css/hmail.css
+/* Welcome to Compass.
+ * In this file you should write your main styles. (or centralize your imports)
+ * Import this file using the following HTML or equivalent:
+ * <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css" /> */
+body {
+  font-size: 13px;
+}
+
+#container tr {
+  height: 5px;
+}
+#container tr.message.read {
+  background-color: #eee;
+}
+#container tr.message.selected {
+  background-color: #ffffcc;
+}
+#container td {
+  height: 5px;
+}
+#container td.marked {
+  border-left: 2px solid #88f;
+  width: 0px;
+}
+#container td.selector {
+  width: 0px;
+}
+#container td.sent {
+  width: 100px;
+}
+#container .folder .btn.active, #container .folder .btn:active {
+  box-shadow: none;
+  color: #db4646;
+  font-size: 14px;
+  font-weight: bold;
+}
+#container .folder .btn.btn-sm {
+  padding: 0px 50px 0px 5px;
+}
+#container .mesg {
+  border-top: 1px solid #dde;
+  width: 80%;
+  padding-top: 1px;
+}
+#container .mesg .content {
+  margin-top: 5px;
+}
+#container .mesg .content pre {
+  font-size: 12px;
+}
+#container .h4 {
+  margin-top: 0;
+}
+#container .loading-true, #container .loading-false {
+  background-color: #ffc;
+  position: absolute;
+  left: 22%;
+  top: 13px;
+  padding: 5px 17px;
+}
+#container .loading-false {
+  display: none;
+}
