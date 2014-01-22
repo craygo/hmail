@@ -6,7 +6,7 @@
                  [org.clojure/clojurescript "0.0-2138" :scope "provided"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha" :scope "provided"]
                  [rohm "0.1.0-SNAPSHOT"]
-                 [sablono "0.1.4-SNAPSHOT"]]
+                 ]
 
   :plugins [[lein-cljsbuild "1.0.1"]]
 
@@ -24,12 +24,12 @@
                        {:id "release"
                         :source-paths ["src"]
                         :compiler {
-                                   :output-to "main.js"
+                                   :output-to "hmail.js"
                                    :optimizations :advanced
                                    :pretty-print false
                                    :output-wrapper false
-                                   :preamble ["om/react.min.js"]
-                                   :externs ["om/externs/react.js"]
+                                   :preamble ["react/react.min.js"]
+                                   :externs ["react/externs/react.js"]
                                    :closure-warnings
                                    {:non-standard-jsdoc :off}}}
                        ]}
