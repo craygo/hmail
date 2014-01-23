@@ -183,7 +183,7 @@
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
             [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" 
-                                                :defaultValue "harry"}]]]
+                                                :defaultValue ""}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
@@ -193,7 +193,7 @@
            [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
             [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server" 
-                                              :defaultValue "mail.empanda.net"}]]]
+                                              :defaultValue ""}]]]
           [:div.form-group
            [:div.col-sm-offset-2.col-sm-4
             [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
