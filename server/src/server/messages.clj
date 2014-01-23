@@ -45,7 +45,9 @@
   (try 
     (let [value (:value mesg)
           {:keys [username password server]} value]
+      (info "login " username server)
       (mail/login channel username password server)
+      (info "login no exception " )
       {:type :update :topic [:user] :value {:name username}})
     (catch javax.mail.AuthenticationFailedException e
       (info "login " e)
