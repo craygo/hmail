@@ -11,7 +11,7 @@
                  (.put "mail.imap.ssl.checkserveridentity" "false")
                  (.put "mail.imaps.ssl.trust" server)
                  #_(.put "mail.debug" "true"))]
-     (let [session (Session/getDefaultInstance props)
+     (let [session (Session/getInstance props)
            store (doto (.getStore session "imaps")
                    (.connect server user passwd))]
        store))))

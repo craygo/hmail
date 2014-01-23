@@ -183,12 +183,11 @@
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
             [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" 
-                                                :defaultValue ""}]]]
+                                                :autoFocus true :defaultValue ""}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
-            [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password"
-                                                :autoFocus true}]]]
+            [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password"}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
