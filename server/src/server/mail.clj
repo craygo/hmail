@@ -1,70 +1,75 @@
 (ns server.mail
   (:use [clojure.tools.logging])
-  (:import [java.util Properties]
-           [javax.mail Session Store Folder Flags Flags$Flag FetchProfile FetchProfile$Item]))
-            
-(defn get-store 
-  ([user passwd]
-   (get-store user passwd "mail.empanda.net"))
-  ([user passwd server]
-   (let [props (doto (Properties.)
-                 (.put "mail.imap.ssl.checkserveridentity" "false")
-                 (.put "mail.imaps.ssl.trust" server)
-                 #_(.put "mail.debug" "true"))]
-     (let [session (Session/getDefaultInstance props)
-           store (doto (.getStore session "imaps")
-                   (.connect server user passwd))]
-       store))))
+  (:require [server.javamail :refer [get-store get-inbox prefetch-messages msg->map fetch-content newer-than]]))
 
-(defn inetaddr->map [inetaddr]
-  (select-keys (bean inetaddr) [:personal :address]))
+; cache of mail keyed by client-id
+; structure is {:store :folders}
+; folder is map {:name {:jm-folder :messages}}
+; message is map {:id {:id :subject :sender :sent :content :flags}}
 
+(def cache (atom {}))
 
-(defn content-handler [b]
-  (let [cont (:content b)]
-    (condp #(.startsWith %2 %1) (:contentType b)
-      "TEXT/PLAIN" {:type :plain :content cont}
-      "TEXT/HTML" {:type :html :content cont}
-      "multipart/ALTERNATIVE" (content-handler (bean (.getBodyPart cont 1)))
-      "multipart/MIXED" (content-handler (bean (.getBodyPart cont 0)))
-      cont)))
+(defn login 
+  ""
+  [cid username password server]
+  (let [store (get-store username password server)]
+    (swap! cache assoc-in [cid :store] store)
+    (swap! cache assoc-in [cid :folders "INBOX" :jm-folder ] (get-inbox store))))
 
-(defn as-message [msg]
-  (let [b (bean msg)]
-    {:subject (:subject b) :sender (inetaddr->map (:sender b))
-     :content nil #_(content-handler b)
-     :sent (:sentDate b)
-     :id (:messageNumber b)
-     :flags (let [flags (-> b :flags bean :systemFlags)]
-              (areduce flags i ret #{} 
-                       (conj ret
-                             (condp = (aget flags i)
-                               Flags$Flag/ANSWERED :answered
-                               Flags$Flag/DELETED :deleted
-                               Flags$Flag/DRAFT :draft
-                               Flags$Flag/FLAGGED :flagged
-                               Flags$Flag/RECENT :recent
-                               Flags$Flag/SEEN :seen
-                               Flags$Flag/USER :user
-                               ))))}))
+(defn logout [cid]
+  (swap! cache assoc-in [cid] {}))
 
-(defn get-inbox [store]
-  (doto (.getFolder store "INBOX")
-    (.open Folder/READ_ONLY)))
+(defn close [cid]
+  (swap! cache dissoc cid))
 
-(defn prefetch-messages [folder n]
-  (let [max-id (.getMessageCount folder)
-        msgs (.getMessages folder (max 0 (- max-id (dec n))) (- max-id 0))
-        fp (doto (FetchProfile.)
-             (.add FetchProfile$Item/ENVELOPE)
-             (.add FetchProfile$Item/FLAGS)
-             (.add FetchProfile$Item/CONTENT_INFO))]
-    (.fetch folder msgs fp)
-    (->> msgs (into []) reverse)))
+(defn- map-by [sq k]
+  (into {} (map #(vector (get % k) %) sq)))
 
-(defn fetch-content [mesg]
-  (let [b (bean mesg)]
-    [(:messageNumber b) (content-handler b)]))
+(defn- merge-messages [cid folder-name msgs]
+  (let [msgs (map msg->map msgs)
+        msgs (map-by msgs :id)]
+    (swap! cache update-in [cid :folders folder-name :messages] merge msgs)
+    msgs))
 
-(defn message-count [folder]
-  (.getMessageCount folder))
+(defn have-messages? [cid folder-name]
+  (not (empty? (get-in @cache [cid :folders folder-name :messages]))))
+
+(defn prefetch 
+  "Prefetch messages from the folder, cache and return them"
+  [cid folder-name n offs]
+  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+    (let [msgs (prefetch-messages folder n offs)]
+      (merge-messages cid folder-name msgs))
+    (warn "prefetch no folder for " folder-name)))
+
+(defn get-content 
+  "Returns and caches content for the message with msg-num."
+  [cid folder-name msg-num]
+  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+    (let [content (fetch-content folder msg-num)]
+      (swap! cache assoc-in [cid :folders folder-name :messages msg-num :content] content)
+      content)))
+
+(defn check-new 
+  "Checks for new messages in the folder and prefetches them.
+  Returns new messages."
+  [cid folder-name]
+  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+    (let [curr-max-num (apply max (keys (get-in @cache [cid :folders folder-name :messages])))
+          msgs (newer-than folder curr-max-num)]
+      (merge-messages cid folder-name msgs))))
+
+(defn- reset [cid folder-name]
+  (swap! cache assoc-in [cid :folders folder-name :messages] {}))
+
+(comment 
+  (def chan 1)
+  (login chan "harry" "Wy85:>13" "mail.empanda.net")
+  ;(.isOpen (get-in @cache [chan :folders "INBOX" :jm-folder]))
+  (reset chan "INBOX")
+  (prefetch chan "INBOX" 2 2)
+  ;(get-content chan "INBOX" 2979)
+  ;j(check-new chan "INBOX")
+  ;j(-> @cache clojure.pprint/pprint)
+  )
+  
