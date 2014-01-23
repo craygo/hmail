@@ -23,11 +23,11 @@
             (send! channel (pr-str (messages-mesg channel {msg-num {:content content}}))))))))
 
 (defn prefetch-top-messages [channel n]
-  (let [msgs (prefetch channel "INBOX" n 2)]
+  (let [msgs (prefetch channel "INBOX" n 0)]
     (fetch-content-for-messages channel msgs)
     msgs))
 
-(def prefetch-size 3)
+(def prefetch-size 10)
 
 ;; handlers
 (defn init-messages [channel]
