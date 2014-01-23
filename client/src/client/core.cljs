@@ -66,8 +66,9 @@
                         % (keys %)))))
 
 (defn init-messages [old-val mesg]
-  (let [new-by-id (:value mesg)]
-    (rohm/put-msg :update [:messages :marker] {:value (apply max (keys new-by-id))})
+  (let [new-by-id (:value mesg)
+        msg-num (apply max (keys new-by-id))]
+    (rohm/put-msg :update [:messages :marker] {:value msg-num})
     (rohm/put-msg :set [:loading] true)
     (assoc-in old-val [:by-id] (apply sorted-map (flatten (seq new-by-id))))))
 
@@ -75,14 +76,13 @@
   (let [new-by-id (:value mesg)]
     (update-in old-val [:by-id] 
                #(reduce (fn [by-id [id m]] 
-                          (assoc-in by-id [id] m))
+                          (update-in by-id [id] merge m))
                        % new-by-id))))
 
 (defn login-user [old-val mesg]
   (rohm/put-msg :set [:loading] true)
   (rohm/effect-messages [{:type :login :topic [:user] :value (:value mesg)}])
-  old-val
-  )
+  old-val)
 
 (def routes [
              [:move [:messages] move-marker]
