@@ -27,7 +27,7 @@
     (fetch-content-for-messages channel msgs)
     msgs))
 
-(def prefetch-size 10)
+(def prefetch-size 4)
 
 ;; handlers
 (defn init-messages [channel]
@@ -47,7 +47,6 @@
           {:keys [username password server]} value]
       (info "login " username server)
       (mail/login channel username password server)
-      (info "login no exception " )
       {:type :update :topic [:user] :value {:name username}})
     (catch javax.mail.AuthenticationFailedException e
       (info "login " e)
