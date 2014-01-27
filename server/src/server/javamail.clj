@@ -50,7 +50,7 @@
 
 (defn get-inbox [store]
   (doto (.getFolder store "INBOX")
-    (.open Folder/READ_ONLY)))
+    (.open Folder/READ_WRITE)))
 
 (defn prefetch-messages [folder n offs]
   (let [max-id (.getMessageCount folder)
@@ -74,3 +74,12 @@
   (let [newer-cnt (- (message-count folder) msg-num)]
     (if (pos? newer-cnt)
       (prefetch-messages folder newer-cnt 0))))
+
+(defn- to-jm-flag [flag]
+  (case flag
+    :deleted (Flags. Flags$Flag/DELETED)
+    :seen (Flags. Flags$Flag/SEEN)
+  ))
+
+(defn set-flags [folder msg-nums flag bool]
+  (.setFlags folder (int-array msg-nums) (to-jm-flag flag) bool))

@@ -1,6 +1,6 @@
 (ns server.mail
   (:use [clojure.tools.logging])
-  (:require [server.javamail :refer [get-store get-inbox prefetch-messages msg->map fetch-content newer-than]]))
+  (:require [server.javamail :refer [get-store get-inbox prefetch-messages msg->map fetch-content newer-than set-flags]]))
 
 ; cache of mail keyed by client-id
 ; structure is {:store :folders}
@@ -34,10 +34,13 @@
 (defn have-messages? [cid folder-name]
   (not (empty? (get-in @cache [cid :folders folder-name :messages]))))
 
+(defn- get-jm-folder [cid folder-name]
+  (get-in @cache [cid :folders folder-name :jm-folder]))
+
 (defn prefetch 
   "Prefetch messages from the folder, cache and return them"
   [cid folder-name n offs]
-  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+  (if-let [folder (get-jm-folder cid folder-name)]
     (let [msgs (prefetch-messages folder n offs)]
       (merge-messages cid folder-name msgs))
     (warn "prefetch no folder for " folder-name)))
@@ -45,7 +48,7 @@
 (defn get-content 
   "Returns and caches content for the message with msg-num."
   [cid folder-name msg-num]
-  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+  (if-let [folder (get-jm-folder cid folder-name)]
     (let [content (fetch-content folder msg-num)]
       (swap! cache assoc-in [cid :folders folder-name :messages msg-num :content] content)
       content)))
@@ -54,10 +57,19 @@
   "Checks for new messages in the folder and prefetches them.
   Returns new messages."
   [cid folder-name]
-  (if-let [folder (get-in @cache [cid :folders folder-name :jm-folder])]
+  (if-let [folder (get-jm-folder cid folder-name)]
     (let [curr-max-num (apply max (keys (get-in @cache [cid :folders folder-name :messages])))
           msgs (newer-than folder curr-max-num)]
       (merge-messages cid folder-name msgs))))
 
-(defn- reset [cid folder-name]
-  (swap! cache assoc-in [cid :folders folder-name :messages] {}))
+
+(defn flag-with
+  "Flag message with nums with given flag and return map of changed messages"
+  [cid folder-name msg-nums flag]
+  (when-let [folder (get-jm-folder cid folder-name)]
+    (let [[flag bool] (first flag)]
+      (set-flags folder msg-nums flag bool)
+      (swap! cache update-in [cid :folders folder-name :messages]
+             #(reduce (fn [m msg-num] (update-in m [msg-num :flags] (if bool conj disj) flag))
+                      % msg-nums))
+      (into {} (filter #(contains? (set msg-nums) (key %1)) (get-in @cache [cid :folders folder-name :messages]))))))

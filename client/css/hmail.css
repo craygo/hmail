@@ -15,6 +15,10 @@ body {
 #container tr.message.selected {
   background-color: #ffffcc;
 }
+#container tr.message.deleted {
+  background-color: #bbb;
+  text-decoration: line-through;
+}
 #container td {
   height: 5px;
 }

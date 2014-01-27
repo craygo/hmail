@@ -1,6 +1,6 @@
 (ns server.messages
   (:use [clojure.tools.logging])
-  (:require [server.mail :as mail :refer [have-messages? get-content prefetch check-new]]
+  (:require [server.mail :as mail :refer [have-messages? get-content prefetch check-new flag-with]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
             [server.images :refer [stop-images]]
@@ -10,17 +10,15 @@
   `(go (send! ~channel (pr-str (do ~@body)))))
 
 ;; message helpers
-(defn messages-mesg [channel msgs & [init]]
-  (let [mesg {:type (if init :init :merge) :topic [:messages] :value msgs}]
-    ;(info "messages-mesg " mesg)
-    mesg))
+(defn messages-mesg [msgs & [init]]
+  {:type (if init :init :merge) :topic [:messages] :value msgs})
 
 (defn fetch-content-for-messages [channel msgs]
   (let [msg-nums (keys msgs)]
     (doseq [msg-num msg-nums]
       (go (let [content (get-content channel "INBOX" msg-num)
                 content (stop-images content)]
-            (send! channel (pr-str (messages-mesg channel {msg-num {:content content}}))))))))
+            (send! channel (pr-str (messages-mesg {msg-num {:content content}}))))))))
 
 (defn prefetch-top-messages [channel n]
   (let [msgs (prefetch channel "INBOX" n 0)]
@@ -35,11 +33,11 @@
     (do
       (ws-send channel 
                (let [msgs (prefetch-top-messages channel prefetch-size)]
-                 (messages-mesg channel msgs :init)))
+                 (messages-mesg msgs :init)))
       [])
     (let [msgs (check-new channel "INBOX")]
       (fetch-content-for-messages channel msgs)
-      (messages-mesg channel msgs))))
+      (messages-mesg msgs))))
 
 (defn login [mesg channel]
   (try 
@@ -62,15 +60,22 @@
 (defn close [channel]
   (mail/close channel))
 
+(defn mark [mesg channel]
+  (let [{:keys [msg-nums flag]} (:value mesg)
+        msgs (flag-with channel "INBOX" msg-nums flag)
+        msgs (into {} (map (fn [[k v]] [k {:flags (:flags v)}]) msgs))]
+    (messages-mesg msgs)))
+
 (defn handle-message [{:keys [type topic] :as mesg} channel]
   (try
     ;(info "handle-message " mesg)
     (condp = type
-                :init (init-messages channel)
-                :login (login mesg channel)
-                :logout (logout channel)
-                :close (close channel)
-                (info "no handler for: " (:dissoc mesg :value))
-                )
+      :init (init-messages channel)
+      :login (login mesg channel)
+      :logout (logout channel)
+      :close (close channel)
+      :mark (mark mesg channel)
+      (info "no handler for: " (:dissoc mesg :value))
+      )
     (catch Exception e
       (error e e))))

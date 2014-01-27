@@ -19,6 +19,10 @@ body {
       &.selected {
         background-color: #ffffcc;
       }
+      &.deleted {
+        background-color: #bbb;
+        text-decoration: line-through;
+      }
     }
   }
   td {

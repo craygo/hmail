@@ -11,7 +11,7 @@
             [client.format :refer [fmt]]
             ))
 
-(def app-state (atom {:user {}
+(def app-state (atom {:user {} ;{:name "harry"}
                       :folders {:list
                                 ["Inbox" "Other"]
                                 :current "Inbox"}
@@ -45,7 +45,9 @@
 (defn read-message [{:keys [by-id marker] :as old-val} mesg]
   (let [reading (get-in old-val [:by-id marker])
         new-val (assoc-in old-val [:reading] reading)]
-    (update-in new-val [:by-id marker :flags] conj :seen)))
+    (if-not (-> reading :flags :seen)
+      (rohm/put-msg :mark [:messages] {:value {:seen true}}))
+    new-val))
 
 (defn up-message [{:keys [by-id marker] :as old-val} mesg]
   (if-let [reading (get-in old-val [:reading])]
@@ -55,15 +57,14 @@
       old-val)))
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
-  (let [f (case (:value mesg)
-            :unread disj
-            :read conj)]
+  (let [[flag bool] (first (:value mesg))
+        msg-nums (if-let [reading (get-in old-val [:reading])]
+                   (vector (:id reading))
+                   (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
+    (rohm/effect-messages [{:type :mark :topic [:messages] :value {:msg-nums msg-nums :flag {flag bool}}}])
     (update-in old-val [:by-id] 
-               #(reduce (fn [by-id id] 
-                          (if (:selected (get by-id id))
-                            (update-in by-id [id :flags] f :seen)
-                            by-id))
-                        % (keys %)))))
+               #(reduce (fn [by-id id]
+                          (update-in by-id [id :flags] (if bool conj disj) flag)) % msg-nums))))
 
 (defn init-messages [old-val mesg]
   (let [new-by-id (:value mesg)
@@ -78,6 +79,24 @@
                #(reduce (fn [by-id [id m]] 
                           (update-in by-id [id] merge m))
                        % new-by-id))))
+
+#_(defn delete-messages [old-val mesg]
+  (let [msg-nums (if-let [reading (get-in old-val [:reading])]
+                   (vector (:id reading))
+                   (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
+    (rohm/effect-messages [{:type :delete :topic [:messages] :value msg-nums}])
+    ; TODO reset :reading or remove selection
+    (update-in old-val [:by-id] 
+               #(reduce (partial mark-message conj :deleted) % (keys %)))))
+
+#_(defn undelete-messages [old-val mesg]
+  (let [msg-nums (if-let [reading (get-in old-val [:reading])]
+                   (vector (:id reading))
+                   (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
+    (rohm/effect-messages [{:type :undelete :topic [:messages] :value msg-nums}])
+    ; TODO reset :reading or remove selection
+    (update-in old-val [:by-id] 
+               #(reduce (partial mark-message disj :deleted) % (keys %)))))
 
 (defn login-user [old-val mesg]
   (rohm/put-msg :set [:loading] true)
@@ -95,6 +114,8 @@
              [:init [:messages] init-messages]
              [:merge [:messages] merge-messages]
              [:login [:user] login-user]
+             ;[:delete [:messages] delete-messages]
+             ;[:undelete [:messages] undelete-messages]
              ])
 
 ;; Pedestal style effect functions
@@ -130,6 +151,7 @@
         [:tr {:className (str "message" 
                               (if is-read " read")
                               (if (:selected mesg) " selected")
+                              (if (:deleted (:flags mesg)) " deleted")
                               )}
          [:td {:className (if (:marker mesg) " marked")} " "]
          [:td.selector [:input {:type "checkbox" :checked (:selected mesg)}]]
@@ -204,6 +226,8 @@
 (def U-key 85)
 (def I-key 73)
 (def enter-key 13)
+(def hash-key 35)
+(def amp-key 64)
 
 (defn key-press [e]
   (condp =  (.-which e)
@@ -212,8 +236,10 @@
     x-key (rohm/put-msg :select [:messages])
     enter-key (rohm/put-msg :read [:messages])
     u-key (rohm/put-msg :up [:messages])
-    U-key (rohm/put-msg :mark [:messages] {:value :unread})
-    I-key (rohm/put-msg :mark [:messages] {:value :read})
+    U-key (rohm/put-msg :mark [:messages] {:value {:seen false}})
+    I-key (rohm/put-msg :mark [:messages] {:value {:seen true}})
+    hash-key (rohm/put-msg :mark [:messages] {:value {:deleted true}})
+    amp-key (rohm/put-msg :mark [:messages] {:value {:deleted false}})
     nil
     #_(.info js/console "key-press " (.-which e))))
 
