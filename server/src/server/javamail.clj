@@ -26,6 +26,7 @@
       "TEXT/HTML" {:type :html :content cont}
       "multipart/ALTERNATIVE" (content-handler (bean (.getBodyPart cont 1)))
       "multipart/MIXED" (content-handler (bean (.getBodyPart cont 0)))
+      "multipart/RELATED" (content-handler (bean (.getBodyPart cont 0)))
       cont)))
 
 (defn msg->map [msg]
