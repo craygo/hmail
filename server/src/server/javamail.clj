@@ -83,3 +83,11 @@
 
 (defn set-flags [folder msg-nums flag bool]
   (.setFlags folder (int-array msg-nums) (to-jm-flag flag) bool))
+
+(defn- parse-type [i]
+  (case i
+    1 :messages
+    2 :folders))
+
+(defn get-store-folders [store]
+  (into {} (map #(vector (.getName %) {:holds (parse-type (.getType %)) :jm-folder %}) (.list (.getDefaultFolder store)))))

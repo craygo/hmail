@@ -12,12 +12,12 @@
             ))
 
 (def app-state (atom {:user {} ;{:name "harry"}
-                      :folders {:list
-                                ["Inbox" "Other"]
-                                :current "Inbox"}
-                      :messages {}
-                      :loading false
-                      }))
+                      :folders {:by-name {"INBOX" {
+                                                   :messages {}}
+                                          }
+                                :current "INBOX"
+                                }
+                      :loading false }))
 
 (defn valid? [state]
   (and true))
@@ -69,16 +69,15 @@
 (defn init-messages [old-val mesg]
   (let [new-by-id (:value mesg)
         msg-num (apply max (keys new-by-id))]
-    (rohm/put-msg :update [:messages :marker] {:value msg-num})
+    (rohm/put-msg :update [:folders :by-name "INBOX" :messages :marker] {:value msg-num})
     (rohm/put-msg :set [:loading] true)
-    (assoc-in old-val [:by-id] (apply sorted-map (flatten (seq new-by-id))))))
+    (apply sorted-map (flatten (seq new-by-id)))))
 
 (defn merge-messages [old-val mesg]
   (let [new-by-id (:value mesg)]
-    (update-in old-val [:by-id] 
-               #(reduce (fn [by-id [id m]] 
+    (reduce (fn [by-id [id m]] 
                           (update-in by-id [id] merge m))
-                       % new-by-id))))
+                       old-val new-by-id)))
 
 #_(defn delete-messages [old-val mesg]
   (let [msg-nums (if-let [reading (get-in old-val [:reading])]
@@ -111,8 +110,8 @@
              [:read [:messages] read-message]
              [:up [:messages] up-message]
              [:mark [:messages] mark-messages]
-             [:init [:messages] init-messages]
-             [:merge [:messages] merge-messages]
+             [:init [:messages :by-id] init-messages]
+             [:merge [:messages :by-id] merge-messages]
              [:login [:user] login-user]
              ;[:delete [:messages] delete-messages]
              ;[:undelete [:messages] undelete-messages]
@@ -129,15 +128,14 @@
     (om/component
       (html
         [:div.folder
-         [:button {:className (str "btn btn-sm" (if (= folder current) " active"))}
-          folder]]))))
+         [:button {:className (str "btn btn-sm" (if (= index current) " active"))}
+          index]]))))
 
 (defn folder-box [folders]
   (om/component
     (html
       [:div.folder-box
-       (rohm/list-of folder-elem (:list folders) {:opts {:current (:current folders)}})
-       ])))
+       (rohm/map-of folder-elem (:by-name folders) {:opts {:current (:current folders)}})])))
 
 (defn unread [is-read v]
   (if-not is-read
@@ -205,16 +203,16 @@
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
             [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" 
-                                                :autoFocus true :defaultValue ""}]]]
+                                                :defaultValue "info@empanda.net"}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
-            [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password"}]]]
+            [:input#inputPassword.form-control {:ref "password" :type "Password" :placeholder "Password" :autoFocus true }]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputServer"} "Server"]
            [:div.col-sm-4
             [:input#inputServer.form-control {:ref "server" :type "Server" :placeholder "Server" 
-                                              :defaultValue ""}]]]
+                                              :defaultValue "mail.empanda.net"}]]]
           [:div.form-group
            [:div.col-sm-offset-2.col-sm-4
             [:button.btn.btn-default {:onClick signin} "Sign in"]]]]]))))
@@ -230,18 +228,19 @@
 (def amp-key 64)
 
 (defn key-press [e]
-  (condp =  (.-which e)
-    j-key (rohm/put-msg :move [:messages] {:value :down})
-    k-key (rohm/put-msg :move [:messages] {:value :up})
-    x-key (rohm/put-msg :select [:messages])
-    enter-key (rohm/put-msg :read [:messages])
-    u-key (rohm/put-msg :up [:messages])
-    U-key (rohm/put-msg :mark [:messages] {:value {:seen false}})
-    I-key (rohm/put-msg :mark [:messages] {:value {:seen true}})
-    hash-key (rohm/put-msg :mark [:messages] {:value {:deleted true}})
-    amp-key (rohm/put-msg :mark [:messages] {:value {:deleted false}})
-    nil
-    #_(.info js/console "key-press " (.-which e))))
+  (let [curr-fold (get-in @app-state [:folders :current])]
+    (condp =  (.-which e)
+      j-key (rohm/put-msg :move [:folders :by-name curr-fold :messages] {:value :down})
+      k-key (rohm/put-msg :move [:folders :by-name curr-fold :messages] {:value :up})
+      x-key (rohm/put-msg :select [:folders :by-name curr-fold :messages])
+      enter-key (rohm/put-msg :read [:folders :by-name curr-fold :messages])
+      u-key (rohm/put-msg :up [:folders :by-name curr-fold :messages])
+      U-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:seen false}})
+      I-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:seen true}})
+      hash-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted true}})
+      amp-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted false}})
+      nil
+      #_(.info js/console "key-press " (.-which e)))))
 
 (defn mail-view [app]
   (reify
@@ -257,10 +256,11 @@
           (om/build folder-box (:folders app))]
          [:div.col-md-10
           (:marker app)
-          (if-let [reading (-> app :messages :reading)]
-            (om/build message-view (:messages app))
-            (om/build message-list (:messages app) {:opts (:marker app)}))
-          ]]))))
+          (let [current (get-in app [:folders :current])
+                folder (get-in app [:folders :by-name current])]
+            (if-let [reading  (-> folder :messages :reading)]
+              (om/build message-view (:messages folder))
+              (om/build message-list (:messages folder) {:opts (:marker folder)})))]]))))
 
 (defn logout []
   (.removeEventListener js/window "keypress" key-press)
@@ -302,7 +302,7 @@
     om/IWillMount
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
-      (rohm/put-msg :update [:messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
+      ;(rohm/put-msg :update [:folders :by-id "INBOX" :messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
       #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]

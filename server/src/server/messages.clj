@@ -1,6 +1,6 @@
 (ns server.messages
   (:use [clojure.tools.logging])
-  (:require [server.mail :as mail :refer [have-messages? get-content prefetch check-new flag-with]]
+  (:require [server.mail :as mail :refer [have-messages? get-content prefetch check-new flag-with get-folders]]
             [clojure.core.async :refer [go chan <! >! <!!]]
             [org.httpkit.server :refer [send!]]
             [server.images :refer [stop-images]]
@@ -11,16 +11,21 @@
 
 ;; message helpers
 (defn messages-mesg [msgs & [init]]
-  {:type (if init :init :merge) :topic [:messages] :value msgs})
+  {:type (if init :init :merge) :topic [:folders :by-name "INBOX" :messages :by-id] :value msgs})
 
 (defn fetch-content-for-messages [channel msgs]
   (let [msg-nums (keys msgs)]
     (doseq [msg-num msg-nums]
-      (go (let [content (get-content channel "INBOX" msg-num)
+      (ws-send channel
+          (let [content (get-content channel "INBOX" msg-num)
                 content (stop-images content)]
-            (send! channel (pr-str (messages-mesg {msg-num {:content content}}))))))))
+            (messages-mesg {msg-num {:content content}}))))))
+
+(defn fetch-folders [channel]
+  (ws-send channel {:type :merge :topic [:folders :by-name] :value (get-folders channel)}))
 
 (defn prefetch-top-messages [channel n]
+  (fetch-folders channel)
   (let [msgs (prefetch channel "INBOX" n 0)]
     (fetch-content-for-messages channel msgs)
     msgs))

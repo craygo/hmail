@@ -1,6 +1,6 @@
 (ns server.mail
   (:use [clojure.tools.logging])
-  (:require [server.javamail :refer [get-store get-inbox prefetch-messages msg->map fetch-content newer-than set-flags]]))
+  (:require [server.javamail :refer [get-store get-inbox prefetch-messages msg->map fetch-content newer-than set-flags get-store-folders]]))
 
 ; cache of mail keyed by client-id
 ; structure is {:store :folders}
@@ -14,7 +14,7 @@
   [cid username password server]
   (let [store (get-store username password server)]
     (swap! cache assoc-in [cid :store] store)
-    (swap! cache assoc-in [cid :folders "INBOX" :jm-folder ] (get-inbox store))))
+    (swap! cache update-in [cid :folders "INBOX"] merge {:jm-folder (get-inbox store) :holds :messages})))
 
 (defn logout [cid]
   (swap! cache assoc-in [cid] {}))
@@ -73,3 +73,17 @@
              #(reduce (fn [m msg-num] (update-in m [msg-num :flags] (if bool conj disj) flag))
                       % msg-nums))
       (into {} (filter #(contains? (set msg-nums) (key %1)) (get-in @cache [cid :folders folder-name :messages]))))))
+
+(defn get-folders 
+  "Gets folders, caches and returns the names"
+  [cid]
+  (if-let [store (get-in @cache [cid :store])]
+    (let [folders (get-store-folders store)
+          folders (dissoc folders "INBOX")]
+      (swap! cache update-in [cid :folders]
+             #(reduce (fn [m [folder-name folder-map]] 
+                        (if-not (contains? m folder-name)
+                          (assoc m folder-name folder-map)
+                          m))
+                      % folders))
+      (into {} (map (fn [[k v]] (vector k (dissoc v :jm-folder))) folders)))))
