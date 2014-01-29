@@ -86,4 +86,4 @@
                           (assoc m folder-name folder-map)
                           m))
                       % folders))
-      (into {} (map (fn [[k v]] (vector k (dissoc v :jm-folder))) folders)))))
+      (into {} (map (fn [[k v]] (vector k (assoc (dissoc v :jm-folder) :messages {}))) folders)))))

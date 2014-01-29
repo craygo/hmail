@@ -12,9 +12,9 @@
             ))
 
 (def app-state (atom {:user {} ;{:name "harry"}
-                      :folders {:by-name {"INBOX" {
-                                                   :messages {}}
-                                          }
+                      :folders {:by-name {"INBOX" 
+                                          {:messages {}}
+                                          #_ #_ "Other" {:messages {}}}
                                 :current "INBOX"
                                 }
                       :loading false }))
@@ -102,6 +102,9 @@
   (rohm/effect-messages [{:type :login :topic [:user] :value (:value mesg)}])
   old-val)
 
+(defn switch-folder [old-val mesg]
+  (assoc-in old-val [:current] (:value mesg)))
+
 (def routes [
              [:move [:messages] move-marker]
              [:update [:**] (fn [o m] (rohm/put-msg :set [:loading] false) (:value m))]
@@ -113,6 +116,7 @@
              [:init [:messages :by-id] init-messages]
              [:merge [:messages :by-id] merge-messages]
              [:login [:user] login-user]
+             [:switch [:folders] switch-folder]
              ;[:delete [:messages] delete-messages]
              ;[:undelete [:messages] undelete-messages]
              ])
@@ -123,19 +127,23 @@
 (defn fail [ev]
     (.error js/console "fail: " ev))
 
-(defn folder-elem [folders owner {:keys [index current]}]
-  (let [folder (get folders index)]
+(defn folder-elem [folders owner folder-name]
+  (let [current (:current folders)
+        switch-folder (fn [e] 
+                        (rohm/put-msg :switch [:folders] {:value folder-name})
+                        false)]
     (om/component
       (html
         [:div.folder
-         [:button {:className (str "btn btn-sm" (if (= index current) " active"))}
-          index]]))))
+         [:button {:className (str "btn btn-sm" (if (= folder-name current) " active")) :onClick switch-folder}
+          folder-name]]))))
 
 (defn folder-box [folders]
   (om/component
     (html
       [:div.folder-box
-       (rohm/map-of folder-elem (:by-name folders) {:opts {:current (:current folders)}})])))
+       (for [[folder-name _] (:by-name folders)]
+         (om/build folder-elem folders {:opts folder-name}))])))
 
 (defn unread [is-read v]
   (if-not is-read
