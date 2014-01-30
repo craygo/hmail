@@ -17,7 +17,7 @@
   (let [msg-nums (keys msgs)]
     (doseq [msg-num msg-nums]
       (ws-send channel
-          (let [content (get-content channel "INBOX" msg-num)
+          (let [content (get-content channel folder msg-num)
                 content (stop-images content)]
             (messages-mesg {msg-num {:content content}} folder))))))
 
