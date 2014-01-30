@@ -11,13 +11,14 @@
             [client.format :refer [fmt]]
             ))
 
-(def app-state (atom {:user {} ;{:name "harry"}
+(def initial-state {:user {} ;{:name "harry"}
                       :folders {:by-name {"INBOX" 
-                                          {:messages {}}
-                                          #_ #_ "Other" {:messages {}}}
+                                          {:messages {}}}
                                 :current "INBOX"
                                 }
-                      :loading false }))
+                      :loading false })
+
+(def app-state (atom initial-state))
 
 (defn valid? [state]
   (and true))
@@ -36,7 +37,7 @@
         new-marker (if-not (contains? (set ids) new-marker) marker new-marker)
         new-val (assoc-in old-val [:marker] new-marker)]
     (if (:reading old-val)
-      (rohm/put-msg :read [:messages]))
+      (rohm/put-msg :read (:topic mesg)))
     new-val))
 
 (defn select-message [{:keys [by-id marker] :as old-val} mesg]
@@ -46,14 +47,22 @@
   (let [reading (get-in old-val [:by-id marker])
         new-val (assoc-in old-val [:reading] reading)]
     (if-not (-> reading :flags :seen)
-      (rohm/put-msg :mark [:messages] {:value {:seen true}}))
+      (rohm/put-msg :mark (:topic mesg) {:value {:seen true}}))
     new-val))
+
+(defn get-current-folder []
+  (get-in @app-state [:folders :current]))
+
+(defn update-current-folder-messages [& [current]]
+  (let [current (or current (get-current-folder))]
+    (rohm/put-msg :set [:loading] true)
+    (rohm/effect-messages [{:type :init :topic [:folders :by-name current :messages]}])))
 
 (defn up-message [{:keys [by-id marker] :as old-val} mesg]
   (if-let [reading (get-in old-val [:reading])]
     (assoc-in old-val [:reading] nil)
     (do
-      (rohm/effect-messages [{:type :init :topic [:messages]}])
+      (update-current-folder-messages)
       old-val)))
 
 (defn mark-messages [{:keys [by-id marker] :as old-val} mesg]
@@ -61,41 +70,28 @@
         msg-nums (if-let [reading (get-in old-val [:reading])]
                    (vector (:id reading))
                    (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
-    (rohm/effect-messages [{:type :mark :topic [:messages] :value {:msg-nums msg-nums :flag {flag bool}}}])
+    (rohm/effect-messages [{:type :mark :topic (:topic mesg) :value {:msg-nums msg-nums :flag {flag bool}}}])
     (update-in old-val [:by-id] 
                #(reduce (fn [by-id id]
                           (update-in by-id [id :flags] (if bool conj disj) flag)) % msg-nums))))
 
+(defn set-marker-to-first []
+  (let [folder (get-current-folder)
+        msg-num (apply max (keys (get-in @app-state [:folders :by-name folder :messages :by-id])))]
+    (rohm/put-msg :update [:folders :by-name folder :messages :marker] {:value msg-num})))
+
 (defn init-messages [old-val mesg]
-  (let [new-by-id (:value mesg)
-        msg-num (apply max (keys new-by-id))]
-    (rohm/put-msg :update [:folders :by-name "INBOX" :messages :marker] {:value msg-num})
+  (let [new-by-id (:value mesg)]
+    (rohm/put-msg :set-marker [])
     (rohm/put-msg :set [:loading] true)
     (apply sorted-map (flatten (seq new-by-id)))))
 
 (defn merge-messages [old-val mesg]
   (let [new-by-id (:value mesg)]
+    (rohm/put-msg :set [:loading] false)
     (reduce (fn [by-id [id m]] 
                           (update-in by-id [id] merge m))
                        old-val new-by-id)))
-
-#_(defn delete-messages [old-val mesg]
-  (let [msg-nums (if-let [reading (get-in old-val [:reading])]
-                   (vector (:id reading))
-                   (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
-    (rohm/effect-messages [{:type :delete :topic [:messages] :value msg-nums}])
-    ; TODO reset :reading or remove selection
-    (update-in old-val [:by-id] 
-               #(reduce (partial mark-message conj :deleted) % (keys %)))))
-
-#_(defn undelete-messages [old-val mesg]
-  (let [msg-nums (if-let [reading (get-in old-val [:reading])]
-                   (vector (:id reading))
-                   (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
-    (rohm/effect-messages [{:type :undelete :topic [:messages] :value msg-nums}])
-    ; TODO reset :reading or remove selection
-    (update-in old-val [:by-id] 
-               #(reduce (partial mark-message disj :deleted) % (keys %)))))
 
 (defn login-user [old-val mesg]
   (rohm/put-msg :set [:loading] true)
@@ -103,22 +99,22 @@
   old-val)
 
 (defn switch-folder [old-val mesg]
+  (update-current-folder-messages (:value mesg))
   (assoc-in old-val [:current] (:value mesg)))
 
 (def routes [
-             [:move [:messages] move-marker]
+             [:move [:**] move-marker]
              [:update [:**] (fn [o m] (rohm/put-msg :set [:loading] false) (:value m))]
              [:set [:**] (fn [o m] (:value m))]
-             [:select [:messages] select-message]
-             [:read [:messages] read-message]
-             [:up [:messages] up-message]
-             [:mark [:messages] mark-messages]
-             [:init [:messages :by-id] init-messages]
-             [:merge [:messages :by-id] merge-messages]
-             [:login [:user] login-user]
-             [:switch [:folders] switch-folder]
-             ;[:delete [:messages] delete-messages]
-             ;[:undelete [:messages] undelete-messages]
+             [:select [:**] select-message]
+             [:read [:**] read-message]
+             [:up [:**] up-message]
+             [:mark [:**] mark-messages]
+             [:init [:** :by-id] init-messages]
+             [:merge [:** :by-id] merge-messages]
+             [:login [:**] login-user]
+             [:switch [:**] switch-folder]
+             [:set-marker [:**] set-marker-to-first]
              ])
 
 ;; Pedestal style effect functions
@@ -175,10 +171,11 @@
       [:div.message-list ;marker
        [:table.table 
         [:tbody 
-         (for [[i mesg] (reverse by-id)]
-           (om/build message-elem mesg 
-             {:key :id 
-              :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})) ]]])))
+         (if (pos? (count by-id))
+           (for [[i mesg] (reverse by-id)]
+             (om/build message-elem mesg 
+                       {:key :id 
+                        :fn (partial (fn [mid m] (if (= mid (:id m)) (assoc m :marker true) m)) marker)})))]]])))
 
 (defn message-view [messages]
   (let [marker (:marker messages)
@@ -254,7 +251,7 @@
   (reify
     om/IDidMount
     (did-mount [_ _]
-      (rohm/effect-messages [{:type :init :topic [:messages]}])
+      (update-current-folder-messages)
       (.addEventListener js/window "keypress" key-press))
     om/IRender 
     (render [_]
@@ -272,8 +269,8 @@
 
 (defn logout []
   (.removeEventListener js/window "keypress" key-press)
-  (rohm/put-msg :update [:messages] {:value {}})
-  (rohm/effect-messages [{:type :logout :topic [:user]}]))
+  (rohm/effect-messages [{:type :logout :topic [:user]}])
+  (rohm/put-msg :update [] {:value initial-state}))
 
 (defn client-box [app]
   (let [username (:name (.-value (:user app)))]
@@ -291,7 +288,7 @@
 (def ws-prot (if (re-find #"localhost" window.location.host) "ws" "wss"))
 (def socket (new js/WebSocket (str ws-prot "://" window.location.host "/ws")))
 (set! (.-onmessage socket) (fn [e]
-                             (if-not (= (.-data e) "ping")
+                             (if-not (or (= (.-data e) "ping") (= (.-data e) "nil"))
                                (try
                                  (let [res (read-string (.-data e))]
                                    (rohm/put-msg res))
@@ -310,7 +307,6 @@
     om/IWillMount
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
-      ;(rohm/put-msg :update [:folders :by-id "INBOX" :messages :marker] {:value (apply max (keys (:by-id (:messages app))))})
       #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]

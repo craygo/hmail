@@ -52,18 +52,27 @@
   (doto (.getFolder store "INBOX")
     (.open Folder/READ_WRITE)))
 
+(defn- with-open-folder [folder]
+  (if (.isOpen folder) folder (doto folder (.open Folder/READ_WRITE))))
+
 (defn prefetch-messages [folder n offs]
-  (let [max-id (.getMessageCount folder)
-        msgs (.getMessages folder (max 0 (- max-id (dec n) offs)) (- max-id offs))
-        fp (doto (FetchProfile.)
-             (.add FetchProfile$Item/ENVELOPE)
-             (.add FetchProfile$Item/FLAGS)
-             (.add FetchProfile$Item/CONTENT_INFO))]
-    (.fetch folder msgs fp)
-    (->> msgs (into []) reverse)))
+  (let [folder (with-open-folder folder)
+        max-id (.getMessageCount folder)]
+    (if (pos? max-id)
+      (let [from (max 1 (- max-id (dec n) offs))
+            to (max 1 (- max-id offs))
+            msgs (.getMessages folder from to)
+            fp (doto (FetchProfile.)
+                 (.add FetchProfile$Item/ENVELOPE)
+                 (.add FetchProfile$Item/FLAGS)
+                 (.add FetchProfile$Item/CONTENT_INFO))]
+        (.fetch folder msgs fp)
+        (->> msgs (into []) reverse))
+      [])))
 
 (defn fetch-content [folder mesg-num]
-  (let [mesg (.getMessage folder mesg-num)
+  (let [folder (with-open-folder folder)
+        mesg (.getMessage folder mesg-num)
         b (bean mesg)]
     (content-handler b)))
 
@@ -82,7 +91,7 @@
   ))
 
 (defn set-flags [folder msg-nums flag bool]
-  (.setFlags folder (int-array msg-nums) (to-jm-flag flag) bool))
+  (.setFlags (with-open-folder folder) (int-array msg-nums) (to-jm-flag flag) bool))
 
 (defn- parse-type [i]
   (case i

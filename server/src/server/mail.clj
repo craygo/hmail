@@ -16,10 +16,20 @@
     (swap! cache assoc-in [cid :store] store)
     (swap! cache update-in [cid :folders "INBOX"] merge {:jm-folder (get-inbox store) :holds :messages})))
 
+(defn- close-store [cid]
+  (try
+    (if-let [store (get-in @cache [cid :store])]
+      (if (.isConnected store)
+        (.close store)))
+    (catch Exception e
+      (warn "close-store cid " cid e))))
+
 (defn logout [cid]
+  (close-store cid)
   (swap! cache assoc-in [cid] {}))
 
 (defn close [cid]
+  (close-store cid)
   (swap! cache dissoc cid))
 
 (defn- map-by [sq k]
@@ -78,12 +88,13 @@
   "Gets folders, caches and returns the names"
   [cid]
   (if-let [store (get-in @cache [cid :store])]
-    (let [folders (get-store-folders store)
-          folders (dissoc folders "INBOX")]
-      (swap! cache update-in [cid :folders]
-             #(reduce (fn [m [folder-name folder-map]] 
-                        (if-not (contains? m folder-name)
-                          (assoc m folder-name folder-map)
-                          m))
-                      % folders))
-      (into {} (map (fn [[k v]] (vector k (assoc (dissoc v :jm-folder) :messages {}))) folders)))))
+    (if (<= (count (get-in @cache [cid :folders])) 1)
+      (let [folders (get-store-folders store)
+            folders (dissoc folders "INBOX")]
+        (swap! cache update-in [cid :folders]
+               #(reduce (fn [m [folder-name folder-map]] 
+                          (if-not (contains? m folder-name)
+                            (assoc m folder-name folder-map)
+                            m))
+                        % folders))
+        (into {} (map (fn [[k v]] (vector k (assoc (dissoc v :jm-folder) :messages {}))) folders))))))
