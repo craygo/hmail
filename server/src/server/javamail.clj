@@ -55,9 +55,9 @@
 (defn- with-open-folder [folder]
   (if (.isOpen folder) folder (doto folder (.open Folder/READ_WRITE))))
 
-(defn prefetch-messages [folder n offs]
+(defn prefetch-messages [folder n offs & [from]]
   (let [folder (with-open-folder folder)
-        max-id (.getMessageCount folder)]
+        max-id (if from (dec from) (.getMessageCount folder))]
     (if (pos? max-id)
       (let [from (max 1 (- max-id (dec n) offs))
             to (max 1 (- max-id offs))
@@ -99,4 +99,7 @@
     2 :folders))
 
 (defn get-store-folders [store]
-  (into {} (map #(vector (.getName %) {:holds (parse-type (.getType %)) :jm-folder %}) (.list (.getDefaultFolder store)))))
+  (let [lst (.list (.getDefaultFolder store))
+        lst (remove #(> (.indexOf (.getName %) ".") -1) lst)]
+    (into {} (map #(vector (.getName %) {:holds (parse-type (.getType %)) :jm-folder %})
+                  lst))))

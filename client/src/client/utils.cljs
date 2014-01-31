@@ -22,3 +22,11 @@
         (if-not (nil? s)
           (reader/read-string s)
           [])))))
+
+(def ns-app-state "app-state")
+
+(defn save-state [state-atom]
+  (store ns-app-state @state-atom))
+
+(defn load-state [state-atom]
+  (reset! state-atom (store ns-app-state)))

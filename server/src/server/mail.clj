@@ -49,9 +49,9 @@
 
 (defn prefetch 
   "Prefetch messages from the folder, cache and return them"
-  [cid folder-name n offs]
+  [cid folder-name n offs & [from]]
   (if-let [folder (get-jm-folder cid folder-name)]
-    (let [msgs (prefetch-messages folder n offs)]
+    (let [msgs (prefetch-messages folder n offs from)]
       (merge-messages cid folder-name msgs))
     (warn "prefetch no folder for " folder-name)))
 
@@ -72,17 +72,24 @@
           msgs (newer-than folder curr-max-num)]
       (merge-messages cid folder-name msgs))))
 
+(defn- do-delete [folder msg-nums]
+  (info "do-delete " folder msg-nums)
+  )
 
 (defn flag-with
   "Flag message with nums with given flag and return map of changed messages"
   [cid folder-name msg-nums flag]
+  (info "flag-with " flag)
   (when-let [folder (get-jm-folder cid folder-name)]
     (let [[flag bool] (first flag)]
       (set-flags folder msg-nums flag bool)
+      (if (= :deleted flag)
+        (do-delete folder msg-nums))
       (swap! cache update-in [cid :folders folder-name :messages]
              #(reduce (fn [m msg-num] (update-in m [msg-num :flags] (if bool conj disj) flag))
                       % msg-nums))
-      (into {} (filter #(contains? (set msg-nums) (key %1)) (get-in @cache [cid :folders folder-name :messages]))))))
+      (into {} (filter #(contains? (set msg-nums) (key %1))
+                       (get-in @cache [cid :folders folder-name :messages]))))))
 
 (defn get-folders 
   "Gets folders, caches and returns the names"

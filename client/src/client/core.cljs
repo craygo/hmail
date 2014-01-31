@@ -9,6 +9,7 @@
             [rohm.core :as rohm :include-macros true]
             [sablono.core :as html :refer [html] :include-macros true]
             [client.format :refer [fmt]]
+            [client.utils :refer [save-state load-state]]
             ))
 
 (def initial-state {:user {} ;{:name "harry"}
@@ -38,6 +39,8 @@
         new-val (assoc-in old-val [:marker] new-marker)]
     (if (:reading old-val)
       (rohm/put-msg :read (:topic mesg)))
+    (if (= new-marker lowest)
+      (rohm/effect-messages [{:type :fetch-more :topic (:topic mesg) :value lowest}]))
     new-val))
 
 (defn select-message [{:keys [by-id marker] :as old-val} mesg]
@@ -71,6 +74,7 @@
                    (vector (:id reading))
                    (keys (filter #(:selected (val %)) (get-in old-val [:by-id]))))]
     (rohm/effect-messages [{:type :mark :topic (:topic mesg) :value {:msg-nums msg-nums :flag {flag bool}}}])
+    (rohm/put-msg :move (:topic mesg) {:value :down})
     (update-in old-val [:by-id] 
                #(reduce (fn [by-id id]
                           (update-in by-id [id :flags] (if bool conj disj) flag)) % msg-nums))))
@@ -121,13 +125,11 @@
 ;; return collection of messages for the effect queue
 
 (defn fail [ev]
-    (.error js/console "fail: " ev))
+  (.error js/console "fail: " ev))
 
 (defn folder-elem [folders owner folder-name]
   (let [current (:current folders)
-        switch-folder (fn [e] 
-                        (rohm/put-msg :switch [:folders] {:value folder-name})
-                        false)]
+        switch-folder (fn [e] (rohm/put-msg :switch [:folders] {:value folder-name}) false)]
     (om/component
       (html
         [:div.folder
@@ -208,7 +210,7 @@
            [:label.col-sm-2.control-label {:htmlFor "inputUsername"} "Username"]
            [:div.col-sm-4
             [:input#inputUsername.form-control {:ref "username" :type "text" :placeholder "Username" 
-                                                :defaultValue "info@empanda.net"}]]]
+                                                :defaultValue "harry"}]]]
           [:div.form-group
            [:label.col-sm-2.control-label {:htmlFor "inputPassword"} "Password"]
            [:div.col-sm-4
@@ -231,9 +233,11 @@
 (def enter-key 13)
 (def hash-key 35)
 (def amp-key 64)
+(def s-key 115)
+(def l-key 108)
 
 (defn key-press [e]
-  (let [curr-fold (get-in @app-state [:folders :current])]
+  (let [curr-fold (get-current-folder)]
     (condp =  (.-which e)
       j-key (rohm/put-msg :move [:folders :by-name curr-fold :messages] {:value :down})
       k-key (rohm/put-msg :move [:folders :by-name curr-fold :messages] {:value :up})
@@ -244,6 +248,8 @@
       I-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:seen true}})
       hash-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted true}})
       amp-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted false}})
+      s-key (save-state app-state)
+      l-key (load-state app-state)
       nil
       #_(.info js/console "key-press " (.-which e)))))
 
@@ -285,7 +291,10 @@
             (om/build login-screen app)
             (om/build mail-view app))]]))))
 
-(def ws-prot (if (re-find #"localhost" window.location.host) "ws" "wss"))
+(defn- local-dev? []
+  (re-find #"localhost" window.location.host))
+
+(def ws-prot (if (local-dev?) "ws" "wss"))
 (def socket (new js/WebSocket (str ws-prot "://" window.location.host "/ws")))
 (set! (.-onmessage socket) (fn [e]
                              (if-not (or (= (.-data e) "ping") (= (.-data e) "nil"))
@@ -293,9 +302,9 @@
                                  (let [res (read-string (.-data e))]
                                    (rohm/put-msg res))
                                  (catch js/Object er
-                                   (.error js/console (pr-str "error " (.-data e))))))))
+                                   (.error js/console (pr-str "error reading data " (.-data e))))))))
 
-(if-not (re-find #"localhost" window.location.host)
+(if-not (local-dev?)
   (js/setInterval #(.send socket "ping") 50000)) ; keep socket open on Heroku
 
 (defn client-service [message input-queue]
@@ -307,6 +316,7 @@
     om/IWillMount
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
+      ;(.addEventListener js/window "keypress" key-press) ; only for dev
       #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]

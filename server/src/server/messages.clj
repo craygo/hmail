@@ -17,22 +17,21 @@
   (let [msg-nums (keys msgs)]
     (doseq [msg-num msg-nums]
       (ws-send channel
-          (let [content (get-content channel folder msg-num)
-                content (stop-images content)]
-            (messages-mesg {msg-num {:content content}} folder))))))
+               (let [content (get-content channel folder msg-num)
+                     content (stop-images content)]
+                 (messages-mesg {msg-num {:content content}} folder))))))
 
 (defn fetch-folders [channel]
   (ws-send channel 
            (if-let [folders (get-folders channel)]
              {:type :merge :topic [:folders :by-name] :value folders})))
 
-(defn prefetch-top-messages [channel folder n]
-  (fetch-folders channel)
-  (let [msgs (prefetch channel folder n 0)]
+(defn prefetch-messages [channel folder n & [from]]
+  (let [msgs (prefetch channel folder n 0 from)]
     (fetch-content-for-messages channel folder msgs)
     msgs))
 
-(def prefetch-size 10)
+(def prefetch-size 3)
 
 (defn- folder-from-topic [topic]
   (nth topic 2))
@@ -44,19 +43,28 @@
     (if-not (have-messages? channel folder)
       (do
         (ws-send channel 
-                 (let [msgs (prefetch-top-messages channel folder prefetch-size)]
+                 (let [msgs (prefetch-messages channel folder prefetch-size)]
                    (messages-mesg msgs folder :init)))
         [])
       (let [msgs (check-new channel folder)]
         (fetch-content-for-messages channel folder msgs)
         (messages-mesg msgs folder)))))
 
+(defn fetch-more [mesg channel]
+  (ws-send channel 
+           (let [folder (folder-from-topic (:topic mesg))
+                 lowest (:value mesg)
+                 msgs (prefetch-messages channel folder prefetch-size lowest)]
+             (messages-mesg msgs folder)))
+  nil)
+ 
 (defn login [mesg channel]
   (try 
     (let [value (:value mesg)
           {:keys [username password server]} value]
       (info "login " username server)
       (mail/login channel username password server)
+      (fetch-folders channel)
       {:type :update :topic [:user] :value {:name username}})
     (catch javax.mail.AuthenticationFailedException e
       (info "login " e)
@@ -88,7 +96,8 @@
       :logout (logout channel)
       :close (close channel)
       :mark (mark mesg channel)
-      (info "no handler for: " (:dissoc mesg :value))
+      :fetch-more (fetch-more mesg channel)
+      (info "no handler for: " (dissoc mesg :value))
       )
     (catch Exception e
       (error e e))))
