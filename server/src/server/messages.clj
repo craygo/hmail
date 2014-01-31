@@ -31,7 +31,7 @@
     (fetch-content-for-messages channel folder msgs)
     msgs))
 
-(def prefetch-size 3)
+(def prefetch-size 10)
 
 (defn- folder-from-topic [topic]
   (nth topic 2))

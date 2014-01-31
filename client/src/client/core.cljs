@@ -266,7 +266,6 @@
          [:div.col-md-2
           (om/build folder-box (:folders app))]
          [:div.col-md-10
-          (:marker app)
           (let [current (get-in app [:folders :current])
                 folder (get-in app [:folders :by-name current])]
             (if-let [reading  (-> folder :messages :reading)]
