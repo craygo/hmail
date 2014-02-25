@@ -91,7 +91,8 @@
   ))
 
 (defn set-flags [folder msg-nums flag bool]
-  (.setFlags (with-open-folder folder) (int-array msg-nums) (to-jm-flag flag) bool))
+  (if msg-nums
+    (.setFlags (with-open-folder folder) (int-array msg-nums) (to-jm-flag flag) bool)))
 
 (defn- parse-type [i]
   (case i

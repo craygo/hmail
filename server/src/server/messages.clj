@@ -89,7 +89,7 @@
 
 (defn handle-message [{:keys [type topic] :as mesg} channel]
   (try
-    ;(info "handle-message " mesg)
+    ;(info "handle-message " (if (= type :login) (dissoc mesg :value) mesg))
     (condp = type
       :init (init-messages topic channel)
       :login (login mesg channel)

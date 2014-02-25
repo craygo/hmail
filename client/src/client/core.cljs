@@ -84,9 +84,14 @@
         msg-num (apply max (keys (get-in @app-state [:folders :by-name folder :messages :by-id])))]
     (rohm/put-msg :update [:folders :by-name folder :messages :marker] {:value msg-num})))
 
+(defn set-marker [old-val mesg]
+  (let [{:keys [topic mesg-num]} mesg]
+    (rohm/put-msg :update (conj topic :marker) {:value mesg-num})
+    old-val))
+
 (defn init-messages [old-val mesg]
   (let [new-by-id (:value mesg)]
-    (rohm/put-msg :set-marker [])
+    (rohm/put-msg :init-marker [])
     (rohm/put-msg :set [:loading] true)
     (apply sorted-map (flatten (seq new-by-id)))))
 
@@ -118,7 +123,8 @@
              [:merge [:** :by-id] merge-messages]
              [:login [:**] login-user]
              [:switch [:**] switch-folder]
-             [:set-marker [:**] set-marker-to-first]
+             [:init-marker [:**] set-marker-to-first]
+             [:set-marker [:**] set-marker]
              ])
 
 ;; Pedestal style effect functions
@@ -149,7 +155,12 @@
     v))
 
 (defn message-elem [mesg owner]
-  (let [is-read (contains? (:flags mesg) :seen)]
+  (let [is-read (contains? (:flags mesg) :seen)
+        open-mesg (fn [topic e] 
+                    (let [mesg-num (last topic)
+                          new-topic (vec (butlast (butlast topic)))]
+                      (rohm/put-msg :set-marker new-topic {:mesg-num mesg-num})
+                      (rohm/put-msg :read new-topic)))]
     (om/component
       (html
         [:tr {:className (str "message" 
@@ -162,7 +173,7 @@
          ;[:td (:id mesg)]
          [:td (unread is-read (or (:personal (:sender mesg)) (:address (:sender mesg))))]
          ;[:td (count (:content mesg))]
-         [:td (unread is-read (:subject mesg))]
+         [:td {:onClick (partial open-mesg (.-path mesg))} (unread is-read (:subject mesg))]
          [:td.sent (unread is-read (fmt (:sent mesg)))]
          ;[:td (pr-str mesg)]
          ]))))
@@ -248,15 +259,21 @@
       I-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:seen true}})
       hash-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted true}})
       amp-key (rohm/put-msg :mark [:folders :by-name curr-fold :messages] {:value {:deleted false}})
+      nil
+      #_(.info js/console "key-press " (.-which e)))))
+
+(defn dev-key-press [e]
+  (let [curr-fold (get-current-folder)]
+    (condp =  (.-which e)
       s-key (save-state app-state)
       l-key (load-state app-state)
       nil
-      #_(.info js/console "key-press " (.-which e)))))
+      #_(.info js/console "dev-key-press " (.-which e)))))
 
 (defn mail-view [app]
   (reify
     om/IDidMount
-    (did-mount [_ _]
+    (did-mount [_]
       (update-current-folder-messages)
       (.addEventListener js/window "keypress" key-press))
     om/IRender 
@@ -283,9 +300,10 @@
       (html
         [:div.container
          [:div.clientBox
-          [:h3.pull-left "Hmail"] (if username [:div.pull-right username [:button.btn {:onClick logout} "logout"]])
-          [:div.loading {:className (str "loading-" (:loading app))} "loading..."]
-          [:div.clearfix]
+          [:div.topBar
+           [:h3.pull-left "Hmail"] (if username [:div.pull-right username [:button.btn {:onClick logout} "logout"]])
+           [:div.loading {:className (str "loading-" (:loading app))} "loading..."]
+           [:div.clearfix]]
           (if (empty? username)
             (om/build login-screen app)
             (om/build mail-view app))]]))))
@@ -315,10 +333,10 @@
     om/IWillMount
     (will-mount [this]
       (rohm/handle-messages app-state routes client-service)
-      ;(.addEventListener js/window "keypress" key-press) ; only for dev
+      ;(.addEventListener js/window "keypress" dev-key-press) ; only for dev
       #_(repl/connect "http://localhost:9000/repl"))
     om/IRender
     (render [_]
       (om/build client-box app))))
 
-(om/root app-state client-app (.getElementById js/document "container"))
+(om/root client-app app-state {:target (.getElementById js/document "container")})
